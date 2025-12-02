@@ -1,7 +1,5 @@
 import os
 import re
-import requests
-from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
 from telegram import Update
 from telegram.ext import (
@@ -11,6 +9,7 @@ from telegram.ext import (
     filters,
     ContextTypes
 )
+import snscrape.modules.twitter as sntwitter
 
 # TOKEN desde variables de entorno
 TOKEN = os.getenv("TOKEN")
@@ -31,31 +30,20 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     tweet_url = match.group(0)
-    nitter_url = tweet_url.replace("twitter.com", "nitter.net").replace("x.com", "nitter.net")
+    tweet_id = tweet_url.split("/")[-1]
 
-    # Scraping desde Nitter
-    r = requests.get(nitter_url)
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    # Texto del tweet (versión robusta)
-    texto_tag = soup.find('div', class_='tweet-content')
-    if texto_tag:
-        # Primero intenta extraer el <p> dentro del div
-        p = texto_tag.find('p')
-        if p:
-            texto = p.get_text(strip=True)
-        else:
-            # Si no hay <p>, toma todo el texto del div
-            texto = texto_tag.get_text(strip=True)
-    else:
+    # Obtener texto del tweet con snscrape
+    try:
+        tweet = next(sntwitter.TwitterTweetScraper(tweet_id).get_items())
+        texto = tweet.content
+        # Imagen si existe
+        img_url = tweet.media[0].fullUrl if tweet.media else None
+    except StopIteration:
         await update.message.reply_text("No pude obtener el texto del tweet.")
         return
-
-    # Imagen del tweet
-    img_tag = soup.find('a', class_='still-image')
-    img_url = None
-    if img_tag:
-        img_url = "https://nitter.net" + img_tag['href']
+    except Exception as e:
+        await update.message.reply_text(f"Error al obtener el tweet: {e}")
+        return
 
     # Traducción
     traducido = GoogleTranslator(source="auto", target="es").translate(texto)
@@ -89,9 +77,3 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_tweet))
 # Ejecutar el bot
 print("Bot funcionando...")
 app.run_polling()
-
-
-
-
-
-
