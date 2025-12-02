@@ -20,16 +20,29 @@ SUBSCRIBE_BUTTON = InlineKeyboardMarkup(
 # ID o username del grupo donde se publicarán los mensajes
 GROUP_ID = "@GPdeMadrid"  # Si tu grupo tiene username, usa "@GPdeMadrid"
 
+# Lista blanca de usuarios (solo ellos pueden usar el bot)
+ALLOWED_USERS = [90120442]  # Reemplaza con tu ID real
+
 # Función de inicio
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id not in ALLOWED_USERS:
+        await update.message.reply_text("❌ No tienes permiso para usar este bot.")
+        return
+
     await update.message.reply_text(
         "¡Hola! Envíame un mensaje y pondré en negrita el primer párrafo.\n"
         "Claves: verde, amarilla, roja, safety, finsafety, ultima.",
         disable_web_page_preview=True
     )
 
-# Función para procesar mensajes
+# Función para procesar mensajes con whitelist
 async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id not in ALLOWED_USERS:
+        await update.message.reply_text("❌ No tienes permiso para usar este bot.")
+        return  # Termina la función aquí si no está permitido
+
     text = update.message.text.strip().lower()
     
     if text in KEYWORDS:
@@ -85,3 +98,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
