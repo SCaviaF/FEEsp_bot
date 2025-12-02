@@ -10,13 +10,15 @@ KEYWORDS = {
     "safety": "🟨🚗🟨🚗🟨\n*SAFETY CAR*\n🟨🚗🟨🚗🟨",
     "finsafety": "🟩🚗🟩🚗🟩🚗🟩\n*FIN DEL SAFETY CAR*\n🟩🚗🟩🚗🟩🚗🟩",
     "ultima": "🔄🔄🔄🔄🔄🔄🔄\n*ÚLTIMA VUELTA!!!!*\n🔄🔄🔄🔄🔄🔄🔄",
-    # Agrega más palabras aquí hasta 10
 }
 
 # Botón inline que se añade debajo de los mensajes de palabra clave
 SUBSCRIBE_BUTTON = InlineKeyboardMarkup(
     [[InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]]
 )
+
+# ID o username del grupo donde se publicarán los mensajes
+GROUP_ID = "@GPdeMadrid"  # Si tu grupo tiene username, usa "@GPdeMadrid"
 
 # Función de inicio
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -29,11 +31,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Función para procesar mensajes
 async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip().lower()
+    
     if text in KEYWORDS:
         # Mensaje de palabra clave con negrita y botón
         response = KEYWORDS[text]
+        # Enviar al usuario
         await update.message.reply_text(
             response,
+            parse_mode='Markdown',
+            disable_web_page_preview=True,
+            reply_markup=SUBSCRIBE_BUTTON
+        )
+        # Enviar al grupo
+        await context.bot.send_message(
+            chat_id=GROUP_ID,
+            text=response,
             parse_mode='Markdown',
             disable_web_page_preview=True,
             reply_markup=SUBSCRIBE_BUTTON
@@ -44,10 +56,20 @@ async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if paragraphs:
             paragraphs[0] = f"*{paragraphs[0]}*"
         formatted_text = '\n\n'.join(paragraphs)
+        # Enviar al usuario
         await update.message.reply_text(
             formatted_text,
             parse_mode='Markdown',
-            disable_web_page_preview=True
+            disable_web_page_preview=True,
+            reply_markup=SUBSCRIBE_BUTTON
+        )
+        # Enviar al grupo
+        await context.bot.send_message(
+            chat_id=GROUP_ID,
+            text=formatted_text,
+            parse_mode='Markdown',
+            disable_web_page_preview=True,
+            reply_markup=SUBSCRIBE_BUTTON
         )
 
 # Función principal
