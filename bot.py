@@ -32,12 +32,17 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tweet_url = match.group(0)
     tweet_id = tweet_url.split("/")[-1]
 
-    # Obtener texto del tweet con snscrape
+    # Obtener texto e imagen del tweet con snscrape
     try:
         tweet = next(sntwitter.TwitterTweetScraper(tweet_id).get_items())
         texto = tweet.content
-        # Imagen si existe
-        img_url = tweet.media[0].fullUrl if tweet.media else None
+        # Obtener la primera imagen si existe
+        img_url = None
+        if tweet.media:
+            for m in tweet.media:
+                if hasattr(m, 'fullUrl'):
+                    img_url = m.fullUrl
+                    break
     except StopIteration:
         await update.message.reply_text("No pude obtener el texto del tweet.")
         return
@@ -77,3 +82,4 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_tweet))
 # Ejecutar el bot
 print("Bot funcionando...")
 app.run_polling()
+
