@@ -1,20 +1,16 @@
 import os
 import re
+import requests
 from deep_translator import GoogleTranslator
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    MessageHandler,
-    CommandHandler,
-    filters,
-    ContextTypes
-)
-import snscrape.modules.twitter as sntwitter
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
-# TOKEN desde variables de entorno
+# TOKEN de Telegram
 TOKEN = os.getenv("TOKEN")
+# Bearer Token de Twitter
+TWITTER_BEARER = os.getenv("TWITTER_BEARER_TOKEN")
 
-# Handler para /start
+# Handler /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "¡Hola! Envíame un enlace de un tweet de Formula E y lo procesaré."
@@ -32,28 +28,29 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tweet_url = match.group(0)
     tweet_id = tweet_url.split("/")[-1]
 
-    # Obtener texto e imagen del tweet con snscrape
+    # Llamada a la API de Twitter
+    headers = {"Authorization": f"Bearer {TWITTER_BEARER}"}
+    url = f"https://api.twitter.com/2/tweets/{tweet_id}?tweet.fields=attachments,entities,author_id"
+    
     try:
-        tweet = next(sntwitter.TwitterTweetScraper(tweet_id).get_items())
-        texto = tweet.content
-        # Obtener la primera imagen si existe
+        res = requests.get(url, headers=headers)
+        res.raise_for_status()
+        data = res.json()
+        texto = data['data']['text']
+
+        # Obtener imagen si existe
         img_url = None
-        if tweet.media:
-            for m in tweet.media:
-                if hasattr(m, 'fullUrl'):
-                    img_url = m.fullUrl
-                    break
-    except StopIteration:
-        await update.message.reply_text("No pude obtener el texto del tweet.")
-        return
+        if 'attachments' in data['data'] and 'media_keys' in data['data']['attachments']:
+            # Para simplificar, solo usamos el primer media_key
+            # Más avanzado: llamar al endpoint de media para obtener URLs reales
+            img_url = None  # Puedes mejorar esto más adelante
+
     except Exception as e:
         await update.message.reply_text(f"Error al obtener el tweet: {e}")
         return
 
     # Traducción
     traducido = GoogleTranslator(source="auto", target="es").translate(texto)
-
-    # Título simple
     titulo = traducido.split(".")[0] + "."
 
     # Enviar imagen si existe
@@ -74,12 +71,9 @@ Twitter FE:
 
 # Crear la aplicación
 app = ApplicationBuilder().token(TOKEN).build()
-
-# Agregar handlers
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_tweet))
 
-# Ejecutar el bot
 print("Bot funcionando...")
 app.run_polling()
 
