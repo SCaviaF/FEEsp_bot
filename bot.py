@@ -14,11 +14,13 @@ KEYWORDS = {
     "ultima": "🔄🔄🔄🔄🔄🔄🔄\nÚLTIMA VUELTA!!!!",
     # Agrega más palabras aquí hasta 10
 }
+
 # Función de inicio
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "¡Hola! Envíame un mensaje y pondré en negrita el primer párrafo y añadiré un enlace al final.\n"
-        "Si envías una palabra clave, te devolveré un mensaje especial."
+        "Si envías una palabra clave, te devolveré un mensaje especial.",
+        disable_web_page_preview=True
     )
 
 # Función para procesar mensajes
@@ -27,14 +29,18 @@ async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text in KEYWORDS:
         # Si la palabra coincide con el diccionario
         response = KEYWORDS[text] + FOOTER_MESSAGE
-        await update.message.reply_text(response)
+        await update.message.reply_text(response, disable_web_page_preview=True)
     else:
         # Formateo normal: negrita en el primer párrafo + mensaje al final
         paragraphs = update.message.text.split('\n\n')
         if paragraphs:
             paragraphs[0] = f"*{paragraphs[0]}*"
         formatted_text = '\n\n'.join(paragraphs) + FOOTER_MESSAGE
-        await update.message.reply_text(formatted_text, parse_mode='Markdown')
+        await update.message.reply_text(
+            formatted_text,
+            parse_mode='Markdown',
+            disable_web_page_preview=True
+        )
 
 # Función principal
 def main():
