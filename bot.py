@@ -37,50 +37,45 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         disable_web_page_preview=True
     )
 
-# Función para procesar mensajes con whitelist
+# Función para procesar mensajes con whitelist y lógica "not"
 async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id not in ALLOWED_USERS:
         await update.message.reply_text("❌ No tienes permiso para usar este bot.")
-        return  # Termina la función aquí si no está permitido
+        return
 
-    text = update.message.text.strip().lower()
-    
-    if text in KEYWORDS:
-        # Mensaje de palabra clave con negrita y botón
-        response = KEYWORDS[text]
-        # Enviar al usuario
-        await update.message.reply_text(
-            response,
-            parse_mode='Markdown',
-            disable_web_page_preview=True,
-            reply_markup=SUBSCRIBE_BUTTON
-        )
-        # Enviar al grupo
+    text = update.message.text.strip()
+    send_to_channel = True  # Por defecto, se envía al canal
+
+    # Si empieza con "not", quitar "not" y no enviar al canal
+    if text.lower().startswith("not"):
+        text = text[3:].strip()  # Quitar "not" y espacios
+        send_to_channel = False
+
+    # Verificar si es palabra clave
+    key = text.lower()
+    if key in KEYWORDS:
+        response = KEYWORDS[key]
+    else:
+        # Formateo normal: negrita en el primer párrafo
+        paragraphs = text.split('\n\n')
+        if paragraphs:
+            paragraphs[0] = f"*{paragraphs[0]}*"
+        response = '\n\n'.join(paragraphs)
+
+    # Enviar siempre al usuario
+    await update.message.reply_text(
+        response,
+        parse_mode='Markdown',
+        disable_web_page_preview=True,
+        reply_markup=SUBSCRIBE_BUTTON
+    )
+
+    # Enviar al grupo solo si no empieza con "not"
+    if send_to_channel:
         await context.bot.send_message(
             chat_id=GROUP_ID,
             text=response,
-            parse_mode='Markdown',
-            disable_web_page_preview=True,
-            reply_markup=SUBSCRIBE_BUTTON
-        )
-    else:
-        # Formateo normal: negrita en el primer párrafo
-        paragraphs = update.message.text.split('\n\n')
-        if paragraphs:
-            paragraphs[0] = f"*{paragraphs[0]}*"
-        formatted_text = '\n\n'.join(paragraphs)
-        # Enviar al usuario
-        await update.message.reply_text(
-            formatted_text,
-            parse_mode='Markdown',
-            disable_web_page_preview=True,
-            reply_markup=SUBSCRIBE_BUTTON
-        )
-        # Enviar al grupo
-        await context.bot.send_message(
-            chat_id=GROUP_ID,
-            text=formatted_text,
             parse_mode='Markdown',
             disable_web_page_preview=True,
             reply_markup=SUBSCRIBE_BUTTON
@@ -99,8 +94,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
 
