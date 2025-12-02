@@ -37,12 +37,19 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     r = requests.get(nitter_url)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # Texto del tweet
+    # Texto del tweet (versión robusta)
     texto_tag = soup.find('div', class_='tweet-content')
-    if not texto_tag:
+    if texto_tag:
+        # Primero intenta extraer el <p> dentro del div
+        p = texto_tag.find('p')
+        if p:
+            texto = p.get_text(strip=True)
+        else:
+            # Si no hay <p>, toma todo el texto del div
+            texto = texto_tag.get_text(strip=True)
+    else:
         await update.message.reply_text("No pude obtener el texto del tweet.")
         return
-    texto = texto_tag.get_text(strip=True)
 
     # Imagen del tweet
     img_tag = soup.find('a', class_='still-image')
@@ -82,6 +89,7 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_tweet))
 # Ejecutar el bot
 print("Bot funcionando...")
 app.run_polling()
+
 
 
 
