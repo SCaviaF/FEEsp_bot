@@ -1,12 +1,28 @@
+import os
 import re
 import requests
 from bs4 import BeautifulSoup
 from deep_translator import GoogleTranslator
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    MessageHandler,
+    CommandHandler,
+    filters,
+    ContextTypes
+)
 
+# TOKEN desde variables de entorno
+TOKEN = os.getenv("TOKEN")
+
+# Handler para /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "¡Hola! Envíame un enlace de un tweet de Formula E y lo procesaré."
+    )
+
+# Handler para procesar tweets
 async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     mensaje = update.message.text
     match = re.search(r'https?://(?:www\.)?(?:x|twitter)\.com/[^\s]+', mensaje)
 
@@ -15,7 +31,6 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     tweet_url = match.group(0)
-    # Convertimos la URL a Nitter
     nitter_url = tweet_url.replace("twitter.com", "nitter.net").replace("x.com", "nitter.net")
 
     # Scraping desde Nitter
@@ -23,7 +38,11 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     soup = BeautifulSoup(r.text, "html.parser")
 
     # Texto del tweet
-    texto = soup.find('div', class_='tweet-content').get_text(strip=True)
+    texto_tag = soup.find('div', class_='tweet-content')
+    if not texto_tag:
+        await update.message.reply_text("No pude obtener el texto del tweet.")
+        return
+    texto = texto_tag.get_text(strip=True)
 
     # Imagen del tweet
     img_tag = soup.find('a', class_='still-image')
@@ -34,7 +53,7 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Traducción
     traducido = GoogleTranslator(source="auto", target="es").translate(texto)
 
-    # Crear título (simple resumen)
+    # Título simple
     titulo = traducido.split(".")[0] + "."
 
     # Enviar imagen si existe
@@ -42,8 +61,7 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_photo(img_url)
 
     # Mensaje final
-    mensaje_final = f"""
-📢 *{titulo}*
+    mensaje_final = f"""📢 *{titulo}*
 
 {traducido}
 
@@ -52,22 +70,19 @@ Twitter FE:
 
 🔔 *Suscríbete a mi canal para más contenido de Formula E*
 """
-
     await update.message.reply_text(mensaje_final, parse_mode="Markdown")
 
+# Crear la aplicación
 app = ApplicationBuilder().token(TOKEN).build()
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_tweet))
+# Agregar handlers
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_tweet))
 
-try:
-    print("Bot funcionando...")
-    app.run_polling()
-except Exception as e:
-    print("Error en el bot:", e)
+# Ejecutar el bot
+print("Bot funcionando...")
+app.run_polling()
 
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
 
 
 
