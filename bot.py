@@ -2,122 +2,111 @@ import os
 import json
 import asyncio
 import websockets
-import time
 from telegram import Bot
 
-# --------------------------
-#  TABLA DE PILOTOS
-# --------------------------
+# === CONFIGURACIÓN ===
+WS_URL = "wss://livetiming.alkamelsystems.com/socket/websocket"
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHANNEL_ID = "@GPdeMadrid"
+
+bot = Bot(TELEGRAM_TOKEN)
+
+# === DICCIONARIO DE PILOTOS (rellénalo con los dorsales reales FE) ===
 PILOTOS = {
-    51: {"nombre": "Nico Müller", "siglas": "MÜL"},
-    94: {"nombre": "Pascal Wehrlein", "siglas": "WEH"},
-    9:  {"nombre": "Mitch Evans", "siglas": "EVA"},
-    13: {"nombre": "António Félix da Costa", "siglas": "DAC"},
-    1:  {"nombre": "Oliver Rowland", "siglas": "ROW"},
-    23: {"nombre": "Norman Nato", "siglas": "NAT"},
-    21: {"nombre": "Nyck de Vries", "siglas": "DEV"},
-    48: {"nombre": "Edoardo Mortara", "siglas": "MOR"},
-    7:  {"nombre": "Maximilian Günther", "siglas": "GÜN"},
-    77: {"nombre": "Taylor Barnard", "siglas": "BAR"},
-    27: {"nombre": "Jake Dennis", "siglas": "DEN"},
-    28: {"nombre": "Felipe Drugovich", "siglas": "DRU"},
-    14: {"nombre": "Joel Eriksson", "siglas": "ERI"},
-    16: {"nombre": "Sébastien Buemi", "siglas": "BUE"},
-    3:  {"nombre": "Pepe Martí", "siglas": "MAR"},
-    33: {"nombre": "Dan Ticktum", "siglas": "TIC"},
-    11: {"nombre": "Lucas di Grassi", "siglas": "DIG"},
-    22: {"nombre": "Zane Maloney", "siglas": "MAL"},
-    25: {"nombre": "Jean-Éric Vergne", "siglas": "JEV"},
-    37: {"nombre": "Nick Cassidy", "siglas": "CAS"},
+    "51": "Nico Müller",
+    "94": "Pascal Wehrlein",
+    "9": "Mitch Evans",
+    "13": "António Félix da Costa",
+    "1": "Oliver Rowland",
+    "23": "Norman Nato",
+    "21": "Nyck de Vries",
+    "48": "Edoardo Mortara",
+    "7": "Maximilian Günther",
+    "77": "Taylor Barnard",
+    "27": "Jake Dennis",
+    "28": "Felipe Drugovich",
+    "14": "Joel Eriksson",
+    "16": "Sébastien Buemi",
+    "3": "Pepe Martí",
+    "33": "Dan Ticktum",
+    "11": "Lucas di Grassi",
+    "22": "Zane Maloney",
+    "25": "Jean-Éric Vergne",
+    "37": "Nick Cassidy"
 }
 
-def obtener_piloto(dorsal):
-    dorsal = int(dorsal)
-    if dorsal in PILOTOS:
-        return PILOTOS[dorsal]["nombre"], PILOTOS[dorsal]["siglas"]
-    return "Piloto Secreto", "???"
-
-# --------------------------
-#  TELEGRAM
-# --------------------------
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
-bot = Bot(BOT_TOKEN)
-
-# --------------------------
-#  WEBSOCKET URL
-# --------------------------
-WS_URL = os.getenv("WS_URL")
-
-ultimo_envio = 0
+def nombre_piloto(dorsal):
+    return PILOTOS.get(dorsal, "Piloto Secreto")
 
 
-async def publicar_top4(dorsales):
-    msg = "🏁 *TOP 4 en vivo*\n\n"
+# === PROCESAR MENSAJES DEL WEBSOCKET ===
+async def procesar_mensaje(msg):
+    obj = json.loads(msg)
 
-    for pos in range(1, 5):
-        dorsal = dorsales[pos - 1] if pos <= len(dorsales) else None
+    if obj.get("collection") != "standings":
+        return None
+    
+    standings_dict = obj["fields"]["standings"]["standings"]
 
-        if not dorsal:
-            msg += f"{pos}. — Sin datos\n"
+    # Convertir standings en lista ordenada por posición
+    lista = []
+
+    for pos_str, datos in standings_dict.items():
+        # extraer el campo data
+        raw = datos.get("data", "")
+        partes = raw.split(";")
+
+        if len(partes) < 2:
+            continue
+        
+        try:
+            position = int(partes[0])
+        except:
             continue
 
-        nombre, siglas = obtener_piloto(dorsal)
-        msg += f"*{pos}.* #{dorsal} ({siglas}) — {nombre}\n"
+        dorsal = partes[1]
 
-    msg += "\nSuscríbete en: t.me/FormulaEEsp"
+        lista.append((position, dorsal))
 
-    await bot.send_message(
-        chat_id=CHANNEL_ID,
-        text=msg,
-        parse_mode="Markdown"
-    )
+    # ordenar por posición real
+    lista.sort(key=lambda x: x[0])
 
+    # top 4
+    top4 = lista[:4]
 
-async def procesar_websocket():
-    """Solo procesa mensajes que incluyen standings reales"""
-    global ultimo_envio
+    texto = "🏁 *TOP 4 EN VIVO*\n\n"
 
-    while True:
-        try:
-            print("🔌 Conectando al websocket...")
-            async with websockets.connect(WS_URL) as ws:
-                print("🟢 Conectado")
+    for pos, dorsal in top4:
+        texto += f"*{pos}. {nombre_piloto(dorsal)}* — #{dorsal}\n"
 
-                async for message in ws:
-                    try:
-                        data = json.loads(message)
-                    except:
-                        continue
-
-                    # --------------------------
-                    #  FILTRAR SOLO "Standings"
-                    # --------------------------
-                    if "Standings" not in data:
-                        continue
-
-                    standings = data["Standings"]
-
-                    if "Classification" not in standings:
-                        continue
-
-                    clasificacion = standings["Classification"]  # Lista de coches
-
-                    # Ordenar por posición
-                    clasificacion = sorted(clasificacion, key=lambda c: c.get("Position", 999))
-
-                    dorsales_top4 = [car.get("RacingNumber") for car in clasificacion[:4]]
-
-                    ahora = time.time()
-                    if ahora - ultimo_envio >= 5:
-                        await publicar_top4(dorsales_top4)
-                        ultimo_envio = ahora
-
-        except Exception as e:
-            print("⚠ Error, reconectando en 3s:", e)
-            await asyncio.sleep(3)
+    return texto
 
 
+# === ESCUCHAR WEBSOCKET ===
+async def escuchar_websocket():
+    async with websockets.connect(WS_URL) as ws:
+        # primer saludo requerido por Meteor/AlKamel
+        await ws.send(json.dumps({"msg": "connect", "version": "1", "support": ["1"]}))
+        
+        publicado = ""
+
+        while True:
+            msg = await ws.recv()
+
+            texto = await procesar_mensaje(msg)
+
+            if texto and texto != publicado:
+                await bot.send_message(
+                    chat_id=CHANNEL_ID,
+                    text=texto,
+                    parse_mode="Markdown"
+                )
+                publicado = texto
+
+
+# === MAIN ===
 if __name__ == "__main__":
-    asyncio.run(procesar_websocket())
+    asyncio.run(escuchar_websocket())
+
 
