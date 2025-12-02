@@ -1,3 +1,3 @@
-python-telegram-bot
-deep-translator
-snscrape
+python-telegram-bot==20.5
+deep-translator==1.11.1
+requests==2.31.0
