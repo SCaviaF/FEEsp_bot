@@ -1,112 +1,87 @@
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import os
-import json
-import asyncio
-import websockets
-from telegram import Bot
 
-# === CONFIGURACIÓN ===
-WS_URL = "wss://livetiming.alkamelsystems.com/socket/websocket"
-
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHANNEL_ID = "@GPdeMadrid"
-
-bot = Bot(TELEGRAM_TOKEN)
-
-# === DICCIONARIO DE PILOTOS (rellénalo con los dorsales reales FE) ===
-PILOTOS = {
-    "51": "Nico Müller",
-    "94": "Pascal Wehrlein",
-    "9": "Mitch Evans",
-    "13": "António Félix da Costa",
-    "1": "Oliver Rowland",
-    "23": "Norman Nato",
-    "21": "Nyck de Vries",
-    "48": "Edoardo Mortara",
-    "7": "Maximilian Günther",
-    "77": "Taylor Barnard",
-    "27": "Jake Dennis",
-    "28": "Felipe Drugovich",
-    "14": "Joel Eriksson",
-    "16": "Sébastien Buemi",
-    "3": "Pepe Martí",
-    "33": "Dan Ticktum",
-    "11": "Lucas di Grassi",
-    "22": "Zane Maloney",
-    "25": "Jean-Éric Vergne",
-    "37": "Nick Cassidy"
+# Diccionario de palabras clave y mensajes predefinidos (todo en negrita)
+KEYWORDS = {
+    "verde": "🟩🟩🟩🟩🟩🟩🟩\n*BANDERA VERDE*\n🟩🟩🟩🟩🟩🟩🟩",
+    "amarilla": "🟨🟨🟨🟨🟨🟨🟨🟨\n*BANDERA AMARILLA*\n🟨🟨🟨🟨🟨🟨🟨🟨",
+    "roja": "🟥🟥🟥🟥🟥🟥\n*BANDERA ROJA*\n🟥🟥🟥🟥🟥🟥",
+    "safety": "🟨🚗🟨🚗🟨\n*SAFETY CAR*\n🟨🚗🟨🚗🟨",
+    "finsafety": "🟩🚗🟩🚗🟩🚗🟩\n*FIN DEL SAFETY CAR*\n🟩🚗🟩🚗🟩🚗🟩",
+    "ultima": "🔄🔄🔄🔄🔄🔄🔄\n*ÚLTIMA VUELTA!!!!*\n🔄🔄🔄🔄🔄🔄🔄",
 }
 
-def nombre_piloto(dorsal):
-    return PILOTOS.get(dorsal, "Piloto Secreto")
+# Botón inline que se añade debajo de los mensajes de palabra clave
+SUBSCRIBE_BUTTON = InlineKeyboardMarkup(
+    [[InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]]
+)
 
+# ID o username del grupo donde se publicarán los mensajes
+GROUP_ID = "@GPdeMadrid"  # Si tu grupo tiene username, usa "@GPdeMadrid"
 
-# === PROCESAR MENSAJES DEL WEBSOCKET ===
-async def procesar_mensaje(msg):
-    obj = json.loads(msg)
+# Función de inicio
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "¡Hola! Envíame un mensaje y pondré en negrita el primer párrafo.\n"
+        "Claves: verde, amarilla, roja, safety, finsafety, ultima.",
+        disable_web_page_preview=True
+    )
 
-    if obj.get("collection") != "standings":
-        return None
+# Función para procesar mensajes
+async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip().lower()
     
-    standings_dict = obj["fields"]["standings"]["standings"]
+    if text in KEYWORDS:
+        # Mensaje de palabra clave con negrita y botón
+        response = KEYWORDS[text]
+        # Enviar al usuario
+        await update.message.reply_text(
+            response,
+            parse_mode='Markdown',
+            disable_web_page_preview=True,
+            reply_markup=SUBSCRIBE_BUTTON
+        )
+        # Enviar al grupo
+        await context.bot.send_message(
+            chat_id=GROUP_ID,
+            text=response,
+            parse_mode='Markdown',
+            disable_web_page_preview=True,
+            reply_markup=SUBSCRIBE_BUTTON
+        )
+    else:
+        # Formateo normal: negrita en el primer párrafo
+        paragraphs = update.message.text.split('\n\n')
+        if paragraphs:
+            paragraphs[0] = f"*{paragraphs[0]}*"
+        formatted_text = '\n\n'.join(paragraphs)
+        # Enviar al usuario
+        await update.message.reply_text(
+            formatted_text,
+            parse_mode='Markdown',
+            disable_web_page_preview=True,
+            reply_markup=SUBSCRIBE_BUTTON
+        )
+        # Enviar al grupo
+        await context.bot.send_message(
+            chat_id=GROUP_ID,
+            text=formatted_text,
+            parse_mode='Markdown',
+            disable_web_page_preview=True,
+            reply_markup=SUBSCRIBE_BUTTON
+        )
 
-    # Convertir standings en lista ordenada por posición
-    lista = []
+# Función principal
+def main():
+    TOKEN = os.getenv("TELEGRAM_TOKEN")
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    for pos_str, datos in standings_dict.items():
-        # extraer el campo data
-        raw = datos.get("data", "")
-        partes = raw.split(";")
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, format_message))
 
-        if len(partes) < 2:
-            continue
-        
-        try:
-            position = int(partes[0])
-        except:
-            continue
+    print("Bot corriendo...")
+    app.run_polling()
 
-        dorsal = partes[1]
-
-        lista.append((position, dorsal))
-
-    # ordenar por posición real
-    lista.sort(key=lambda x: x[0])
-
-    # top 4
-    top4 = lista[:4]
-
-    texto = "🏁 *TOP 4 EN VIVO*\n\n"
-
-    for pos, dorsal in top4:
-        texto += f"*{pos}. {nombre_piloto(dorsal)}* — #{dorsal}\n"
-
-    return texto
-
-
-# === ESCUCHAR WEBSOCKET ===
-async def escuchar_websocket():
-    async with websockets.connect(WS_URL) as ws:
-        # primer saludo requerido por Meteor/AlKamel
-        await ws.send(json.dumps({"msg": "connect", "version": "1", "support": ["1"]}))
-        
-        publicado = ""
-
-        while True:
-            msg = await ws.recv()
-
-            texto = await procesar_mensaje(msg)
-
-            if texto and texto != publicado:
-                await bot.send_message(
-                    chat_id=CHANNEL_ID,
-                    text=texto,
-                    parse_mode="Markdown"
-                )
-                publicado = texto
-
-
-# === MAIN ===
 if __name__ == "__main__":
-    asyncio.run(escuchar_websocket())
-
-
+    main()
