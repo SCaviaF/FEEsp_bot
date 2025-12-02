@@ -1,4 +1,6 @@
 python-telegram-bot
 deep-translator
 beautifulsoup4
+snscrape
 requests
+
