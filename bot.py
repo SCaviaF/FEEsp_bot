@@ -21,7 +21,7 @@ SUBSCRIBE_BUTTON = InlineKeyboardMarkup(
 GROUP_ID = "@GPdeMadrid"  # Si tu grupo tiene username, usa "@GPdeMadrid"
 
 # Lista blanca de usuarios (solo ellos pueden usar el bot)
-ALLOWED_USERS = [90120442]  # Reemplaza con tu ID real
+ALLOWED_USERS = ["PERSONAL_ID"]  # Reemplaza con tu ID real
 
 # Función de inicio
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,4 +98,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
