@@ -1,11 +1,9 @@
 import re
 import requests
 from bs4 import BeautifulSoup
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-
-translator = Translator()
 
 async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -34,7 +32,7 @@ async def procesar_tweet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         img_url = "https://nitter.net" + img_tag['href']
 
     # Traducción
-    traducido = translator.translate(texto, dest="es").text
+    traducido = GoogleTranslator(source="auto", target="es").translate(texto)
 
     # Crear título (simple resumen)
     titulo = traducido.split(".")[0] + "."
@@ -69,3 +67,4 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
+
