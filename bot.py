@@ -1,41 +1,49 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import os
 
-FOOTER_MESSAGE = "\n\nSuscríbete en: t.me/FormulaEEsp"
-
-# Diccionario de palabras clave y mensajes predefinidos
+# Diccionario de palabras clave y mensajes predefinidos (todo en negrita)
 KEYWORDS = {
-    "verde": "🟩🟩🟩🟩🟩🟩🟩\nBANDERA VERDE\n🟩🟩🟩🟩🟩🟩🟩",
-    "amarilla": "🟨🟨🟨🟨🟨🟨🟨🟨\nBANDERA AMARILLA\n🟨🟨🟨🟨🟨🟨🟨🟨",
-    "roja": "🟥🟥🟥🟥🟥🟥\nBANDERA ROJA\n🟥🟥🟥🟥🟥🟥",
-    "safety": "🟨🚗🟨🚗🟨\nSAFETY CAR\n🟨🚗🟨🚗🟨",
-    "finsafety": "🟩🚗🟩🚗🟩🚗🟩\nFIN DEL SAFETY CAR\n🟩🚗🟩🚗🟩🚗🟩",
-    "ultima": "🔄🔄🔄🔄🔄🔄🔄\nÚLTIMA VUELTA!!!!",
+    "verde": "🟩🟩🟩🟩🟩🟩🟩\n*BANDERA VERDE*\n🟩🟩🟩🟩🟩🟩🟩",
+    "amarilla": "🟨🟨🟨🟨🟨🟨🟨🟨\n*BANDERA AMARILLA*\n🟨🟨🟨🟨🟨🟨🟨🟨",
+    "roja": "🟥🟥🟥🟥🟥🟥\n*BANDERA ROJA*\n🟥🟥🟥🟥🟥🟥",
+    "safety": "🟨🚗🟨🚗🟨\n*SAFETY CAR*\n🟨🚗🟨🚗🟨",
+    "finsafety": "🟩🚗🟩🚗🟩🚗🟩\n*FIN DEL SAFETY CAR*\n🟩🚗🟩🚗🟩🚗🟩",
+    "ultima": "🔄🔄🔄🔄🔄🔄🔄\n*ÚLTIMA VUELTA!!!!*\n🔄🔄🔄🔄🔄🔄🔄",
     # Agrega más palabras aquí hasta 10
 }
+
+# Botón inline que se añade debajo de los mensajes de palabra clave
+SUBSCRIBE_BUTTON = InlineKeyboardMarkup(
+    [[InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]]
+)
 
 # Función de inicio
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "¡Hola! Envíame un mensaje y pondré en negrita el primer párrafo y añadiré un enlace al final.\n"
-        "Si envías una palabra clave, te devolveré un mensaje especial.",
+        "¡Hola! Envíame un mensaje y pondré en negrita el primer párrafo.\n"
+        "Claves: verde, amarilla, roja, safety, finsafety, ultima.",
         disable_web_page_preview=True
     )
 
 # Función para procesar mensajes
 async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip().lower()  # Convertimos a minúsculas para coincidencias
+    text = update.message.text.strip().lower()
     if text in KEYWORDS:
-        # Si la palabra coincide con el diccionario
-        response = KEYWORDS[text] + FOOTER_MESSAGE
-        await update.message.reply_text(response, disable_web_page_preview=True)
+        # Mensaje de palabra clave con negrita y botón
+        response = KEYWORDS[text]
+        await update.message.reply_text(
+            response,
+            parse_mode='Markdown',
+            disable_web_page_preview=True,
+            reply_markup=SUBSCRIBE_BUTTON
+        )
     else:
-        # Formateo normal: negrita en el primer párrafo + mensaje al final
+        # Formateo normal: negrita en el primer párrafo
         paragraphs = update.message.text.split('\n\n')
         if paragraphs:
             paragraphs[0] = f"*{paragraphs[0]}*"
-        formatted_text = '\n\n'.join(paragraphs) + FOOTER_MESSAGE
+        formatted_text = '\n\n'.join(paragraphs)
         await update.message.reply_text(
             formatted_text,
             parse_mode='Markdown',
