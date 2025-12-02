@@ -55,16 +55,20 @@ Twitter FE:
 
     await update.message.reply_text(mensaje_final, parse_mode="Markdown")
 
-async def main():
-    TOKEN = "AQUÍ_TU_TOKEN_DE_TELEGRAM"
-    app = ApplicationBuilder().token(TOKEN).build()
+app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_tweet))
 
+try:
     print("Bot funcionando...")
-    await app.run_polling()
+    app.run_polling()
+except Exception as e:
+    print("Error en el bot:", e)
 
 if __name__ == "__main__":
     import asyncio
     asyncio.run(main())
+
+
+
 
