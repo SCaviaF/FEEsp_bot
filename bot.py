@@ -18,8 +18,7 @@ SUBSCRIBE_BUTTON = InlineKeyboardMarkup(
 )
 
 # ID o username del grupo donde se publicarán los mensajes
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0"))  # 0 por defecto si no existe
-GROUP_ID = CHANNEL_ID  # Si tu grupo tiene username, usa "@GPdeMadrid"
+GROUP_ID = os.getenv("CHANNEL_ID")  # valor por defecto opcional
 
 # Lista blanca de usuarios (solo ellos pueden usar el bot)
 PERSONAL_ID = int(os.getenv("PERSONAL_ID", "0"))  # 0 por defecto si no existe
@@ -100,6 +99,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
