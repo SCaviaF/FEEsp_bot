@@ -1,87 +1,123 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import os
+import json
+import asyncio
+import websockets
+import time
+from telegram import Bot
 
-# Diccionario de palabras clave y mensajes predefinidos (todo en negrita)
-KEYWORDS = {
-    "verde": "🟩🟩🟩🟩🟩🟩🟩\n*BANDERA VERDE*\n🟩🟩🟩🟩🟩🟩🟩",
-    "amarilla": "🟨🟨🟨🟨🟨🟨🟨🟨\n*BANDERA AMARILLA*\n🟨🟨🟨🟨🟨🟨🟨🟨",
-    "roja": "🟥🟥🟥🟥🟥🟥\n*BANDERA ROJA*\n🟥🟥🟥🟥🟥🟥",
-    "safety": "🟨🚗🟨🚗🟨\n*SAFETY CAR*\n🟨🚗🟨🚗🟨",
-    "finsafety": "🟩🚗🟩🚗🟩🚗🟩\n*FIN DEL SAFETY CAR*\n🟩🚗🟩🚗🟩🚗🟩",
-    "ultima": "🔄🔄🔄🔄🔄🔄🔄\n*ÚLTIMA VUELTA!!!!*\n🔄🔄🔄🔄🔄🔄🔄",
+# --------------------------
+#  TABLA DE PILOTOS
+# --------------------------
+PILOTOS = {
+    51: {"nombre": "Nico Müller", "siglas": "MÜL"},
+    94: {"nombre": "Pascal Wehrlein", "siglas": "WEH"},
+    9:  {"nombre": "Mitch Evans", "siglas": "EVA"},
+    13: {"nombre": "António Félix da Costa", "siglas": "DAC"},
+    1:  {"nombre": "Oliver Rowland", "siglas": "ROW"},
+    23: {"nombre": "Norman Nato", "siglas": "NAT"},
+    21: {"nombre": "Nyck de Vries", "siglas": "DEV"},
+    48: {"nombre": "Edoardo Mortara", "siglas": "MOR"},
+    7:  {"nombre": "Maximilian Günther", "siglas": "GÜN"},
+    77: {"nombre": "Taylor Barnard", "siglas": "BAR"},
+    27: {"nombre": "Jake Dennis", "siglas": "DEN"},
+    28: {"nombre": "Felipe Drugovich", "siglas": "DRU"},
+    14: {"nombre": "Joel Eriksson", "siglas": "ERI"},
+    16: {"nombre": "Sébastien Buemi", "siglas": "BUE"},
+    3:  {"nombre": "Pepe Martí", "siglas": "MAR"},
+    33: {"nombre": "Dan Ticktum", "siglas": "TIC"},
+    11: {"nombre": "Lucas di Grassi", "siglas": "DIG"},
+    22: {"nombre": "Zane Maloney", "siglas": "MAL"},
+    25: {"nombre": "Jean-Éric Vergne", "siglas": "JEV"},
+    37: {"nombre": "Nick Cassidy", "siglas": "CAS"},
 }
 
-# Botón inline que se añade debajo de los mensajes de palabra clave
-SUBSCRIBE_BUTTON = InlineKeyboardMarkup(
-    [[InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]]
-)
+def obtener_piloto(dorsal):
+    dorsal = int(dorsal)
+    if dorsal in PILOTOS:
+        return PILOTOS[dorsal]["nombre"], PILOTOS[dorsal]["siglas"]
+    return "Piloto Secreto", "???"
 
-# ID o username del grupo donde se publicarán los mensajes
-GROUP_ID = "@GPdeMadrid"  # Si tu grupo tiene username, usa "@GPdeMadrid"
+# --------------------------
+#  TELEGRAM
+# --------------------------
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
+bot = Bot(BOT_TOKEN)
 
-# Función de inicio
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "¡Hola! Envíame un mensaje y pondré en negrita el primer párrafo.\n"
-        "Claves: verde, amarilla, roja, safety, finsafety, ultima.",
-        disable_web_page_preview=True
+# --------------------------
+#  WEBSOCKET URL
+# --------------------------
+WS_URL = os.getenv("WS_URL")
+
+ultimo_envio = 0
+
+
+async def publicar_top4(dorsales):
+    msg = "🏁 *TOP 4 en vivo*\n\n"
+
+    for pos in range(1, 5):
+        dorsal = dorsales[pos - 1] if pos <= len(dorsales) else None
+
+        if not dorsal:
+            msg += f"{pos}. — Sin datos\n"
+            continue
+
+        nombre, siglas = obtener_piloto(dorsal)
+        msg += f"*{pos}.* #{dorsal} ({siglas}) — {nombre}\n"
+
+    msg += "\nSuscríbete en: t.me/FormulaEEsp"
+
+    await bot.send_message(
+        chat_id=CHANNEL_ID,
+        text=msg,
+        parse_mode="Markdown"
     )
 
-# Función para procesar mensajes
-async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip().lower()
-    
-    if text in KEYWORDS:
-        # Mensaje de palabra clave con negrita y botón
-        response = KEYWORDS[text]
-        # Enviar al usuario
-        await update.message.reply_text(
-            response,
-            parse_mode='Markdown',
-            disable_web_page_preview=True,
-            reply_markup=SUBSCRIBE_BUTTON
-        )
-        # Enviar al grupo
-        await context.bot.send_message(
-            chat_id=GROUP_ID,
-            text=response,
-            parse_mode='Markdown',
-            disable_web_page_preview=True,
-            reply_markup=SUBSCRIBE_BUTTON
-        )
-    else:
-        # Formateo normal: negrita en el primer párrafo
-        paragraphs = update.message.text.split('\n\n')
-        if paragraphs:
-            paragraphs[0] = f"*{paragraphs[0]}*"
-        formatted_text = '\n\n'.join(paragraphs)
-        # Enviar al usuario
-        await update.message.reply_text(
-            formatted_text,
-            parse_mode='Markdown',
-            disable_web_page_preview=True,
-            reply_markup=SUBSCRIBE_BUTTON
-        )
-        # Enviar al grupo
-        await context.bot.send_message(
-            chat_id=GROUP_ID,
-            text=formatted_text,
-            parse_mode='Markdown',
-            disable_web_page_preview=True,
-            reply_markup=SUBSCRIBE_BUTTON
-        )
 
-# Función principal
-def main():
-    TOKEN = os.getenv("TELEGRAM_TOKEN")
-    app = ApplicationBuilder().token(TOKEN).build()
+async def procesar_websocket():
+    """Solo procesa mensajes que incluyen standings reales"""
+    global ultimo_envio
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, format_message))
+    while True:
+        try:
+            print("🔌 Conectando al websocket...")
+            async with websockets.connect(WS_URL) as ws:
+                print("🟢 Conectado")
 
-    print("Bot corriendo...")
-    app.run_polling()
+                async for message in ws:
+                    try:
+                        data = json.loads(message)
+                    except:
+                        continue
+
+                    # --------------------------
+                    #  FILTRAR SOLO "Standings"
+                    # --------------------------
+                    if "Standings" not in data:
+                        continue
+
+                    standings = data["Standings"]
+
+                    if "Classification" not in standings:
+                        continue
+
+                    clasificacion = standings["Classification"]  # Lista de coches
+
+                    # Ordenar por posición
+                    clasificacion = sorted(clasificacion, key=lambda c: c.get("Position", 999))
+
+                    dorsales_top4 = [car.get("RacingNumber") for car in clasificacion[:4]]
+
+                    ahora = time.time()
+                    if ahora - ultimo_envio >= 5:
+                        await publicar_top4(dorsales_top4)
+                        ultimo_envio = ahora
+
+        except Exception as e:
+            print("⚠ Error, reconectando en 3s:", e)
+            await asyncio.sleep(3)
+
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(procesar_websocket())
+
