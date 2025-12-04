@@ -181,7 +181,7 @@ def generar_top(texto):
         dorsal_emoji = dorsal_a_emojis(dorsal)
         if i == 1:
             mensaje += f"{medallas[i]} __{nombre}__ {colores} {bandera} {dorsal_emoji}\n"
-        else if i < 3:
+        elif i < 3:
             mensaje += f"{medallas[i]} {nombre} {colores} {bandera} {dorsal_emoji}\n"
         else:
             posicion = f"{i+1}⃣"
@@ -281,6 +281,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
