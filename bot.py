@@ -136,7 +136,7 @@ def generar_top(texto):
 
     # Construir mensaje Top
     medallas = ["🥇", "🥈", "🥉"]
-    mensaje = f"Top {len(nombres)} actual:\n\n"
+    mensaje = f"🔢*Top {len(nombres)} actual:*🔢\n\n"
 
     for i, nombre in enumerate(nombres):
         if i < 3:
@@ -223,4 +223,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
