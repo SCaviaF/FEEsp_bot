@@ -12,35 +12,73 @@ KEYWORDS = {
     "ultima": "🔄🔄🔄🔄🔄🔄🔄\n*ÚLTIMA VUELTA!!!!*\n🔄🔄🔄🔄🔄🔄🔄",
 }
 
-# Diccionario de pilotos: APELLIDO → Nombre completo
-PILOTOS = {
-    "müller": "Nico Müller",
-    "muller": "Nico Müller",
-    "wehrlein": "Pascal Wehrlein",
-    "evans": "Mitch Evans",
-    "da costa": "António Félix da Costa",
-    "costa": "António Félix da Costa",
-    "rowland": "Oliver Rowland",
-    "nato": "Norman Nato",
-    "de vries": "Nyck De Vries",
-    "devries": "Nyck De Vries",
-    "mortara": "Edoardo Mortara",
-    "günther": "Maximilian Günther",
-    "gunther": "Maximilian Günther",
-    "barnard": "Taylor Barnard",
-    "dennis": "Jake Dennis",
-    "drugovich": "Felipe Drugovich",
-    "eriksson": "Joel Eriksson",
-    "buemi": "Sébastien Buemi",
-    "martí": "Pepe Martí",
-    "marti": "Pepe Martí",
-    "tictum": "Dan Ticktum",
-    "tisktum": "Dan Ticktum",
-    "di grassi": "Lucas di Grassi",
-    "dig": "Lucas di Grassi",
-    "maloney": "Zane Maloney",
-    "vergne": "Jean-Éric Vergne",
-    "cassidy": "Nick Cassidy",
+# -------- PILOTOS COMPLETOS --------
+PILOTOS_INFO = {
+    "müller":  ("Nico Müller",          "🇨🇭", 51, "🟣🟣"),
+    "muller":  ("Nico Müller",          "🇨🇭", 51, "🟣🟣"),
+    "wehrlein":("Pascal Wehrlein",      "🇩🇪", 94, "🟣🟣"),
+
+    "evans":   ("Mitch Evans",          "🇳🇿", 9,  "⚫🟡"),
+    "da costa":("António Félix da Costa","🇵🇹", 13, "⚫🟡"),
+    "costa":   ("António Félix da Costa","🇵🇹", 13, "⚫🟡"),
+
+    "rowland": ("Oliver Rowland",       "🇬🇧", 1,  "🔴⚪"),
+    "nato":    ("Norman Nato",          "🇫🇷", 23, "🔴⚪"),
+
+    "de vries":("Nyck De Vries",        "🇳🇱", 21, "🔴⚫"),
+    "devries": ("Nyck De Vries",        "🇳🇱", 21, "🔴⚫"),
+    "mortara": ("Edoardo Mortara",      "🇨🇭", 48, "🔴⚫"),
+
+    "günther": ("Maximilian Günther",   "🇩🇪", 7,  "🟡⚫"),
+    "gunther": ("Maximilian Günther",   "🇩🇪", 7,  "🟡⚫"),
+    "barnard": ("Taylor Barnard",       "🇬🇧", 77, "🟡⚫"),
+
+    "dennis":  ("Jake Dennis",          "🇬🇧", 27, "🔴⚫"),
+    "drugovich":("Felipe Drugovich",    "🇧🇷", 28, "🔴⚫"),
+
+    "eriksson":("Joel Eriksson",        "🇸🇪", 14, "🟢🔵"),
+    "buemi":   ("Sébastien Buemi",      "🇨🇭", 16, "🟢🔵"),
+
+    "martí":   ("Pepe Martí",           "🇪🇸", 3,  "🟡🟤"),
+    "marti":   ("Pepe Martí",           "🇪🇸", 3,  "🟡🟤"),
+    "tictum":  ("Dan Ticktum",          "🇬🇧", 33, "🟡🟤"),
+    "ticktum": ("Dan Ticktum",          "🇬🇧", 33, "🟡🟤"),
+
+    "di grassi":("Lucas di Grassi",     "🇧🇷", 11, "🟡🔵"),
+    "maloney": ("Zane Maloney",         "🇧🇧", 22, "🟡🔵"),
+
+    "vergne":  ("Jean-Éric Vergne",     "🇫🇷", 25, "🔴🔵"),
+    "cassidy": ("Nick Cassidy",         "🇳🇿", 37, "🔴🔵"),
+    
+    "mul":  ("Nico Müller",          "🇨🇭", 51, "🟣🟣"),
+    "weh":("Pascal Wehrlein",      "🇩🇪", 94, "🟣🟣"),
+
+    "eva":   ("Mitch Evans",          "🇳🇿", 9,  "⚫🟡"),
+    "dac":("António Félix da Costa","🇵🇹", 13, "⚫🟡"),
+
+    "row": ("Oliver Rowland",       "🇬🇧", 1,  "🔴⚪"),
+    "nat":    ("Norman Nato",          "🇫🇷", 23, "🔴⚪"),
+
+    "dev": ("Nyck De Vries",        "🇳🇱", 21, "🔴⚫"),
+    "mor": ("Edoardo Mortara",      "🇨🇭", 48, "🔴⚫"),
+
+    "gun": ("Maximilian Günther",   "🇩🇪", 7,  "🟡⚫"),
+    "bar": ("Taylor Barnard",       "🇬🇧", 77, "🟡⚫"),
+
+    "den":  ("Jake Dennis",          "🇬🇧", 27, "🔴⚫"),
+    "dru":("Felipe Drugovich",    "🇧🇷", 28, "🔴⚫"),
+
+    "eri":("Joel Eriksson",        "🇸🇪", 14, "🟢🔵"),
+    "bue":   ("Sébastien Buemi",      "🇨🇭", 16, "🟢🔵"),
+
+    "mar":   ("Pepe Martí",           "🇪🇸", 3,  "🟡🟤"),
+    "tic": ("Dan Ticktum",          "🇬🇧", 33, "🟡🟤"),
+
+    "dig":     ("Lucas di Grassi",      "🇧🇷", 11, "🟡🔵"),
+    "mal": ("Zane Maloney",         "🇧🇧", 22, "🟡🔵"),
+
+    "ver":  ("Jean-Éric Vergne",     "🇫🇷", 25, "🔴🔵"),
+    "cas": ("Nick Cassidy",         "🇳🇿", 37, "🔴🔵"),
 }
 
 # Botón inline que se añade debajo de los mensajes
@@ -185,3 +223,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
