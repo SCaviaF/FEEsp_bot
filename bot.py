@@ -109,82 +109,54 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- FUNCIÓN NUEVA: PROCESA MENSJES 'Top ...' ---
 def generar_top(texto):
-    RESTO_VUELTAS = 33  # EDITA AQUÍ EL TOTAL DE VUELTAS
-
-    # Quitar "Top"
-    contenido = texto[3:].strip()
-
-    # Detectar si empieza con número de vuelta
-    partes = contenido.split(" ", 1)
-
-    vuelta = None
-    if partes[0].isdigit():  # Top 25 ...
-        vuelta = int(partes[0])
-        if len(partes) == 1:
-            return {"error": "Debes escribir apellidos después del número."}
-        contenido = partes[1].strip()
-
-    # Separar apellidos
-    apellidos = [a.strip().lower() for a in contenido.split(",")]
+    lista = texto[3:].strip()
+    apellidos = [a.strip().lower() for a in lista.split(",")]
 
     if not (3 <= len(apellidos) <= 5):
-        return {"error": "La lista debe contener entre *3 y 5 apellidos*."}
+        return {"error": "La lista debe contener entre 3 y 5 apellidos."}
 
-    pilotos_list = []
+    nombres = []
     errores = []
 
+    # Comprobación de cada apellido
     for ap in apellidos:
         if ap in PILOTOS_INFO:
-            pilotos_list.append(PILOTOS_INFO[ap])
+            nombres.append(PILOTOS_INFO[ap])
         else:
+            # Buscar variantes sin espacios
             encontrado = None
             for key in PILOTOS_INFO:
                 if key.replace(" ", "") == ap.replace(" ", ""):
                     encontrado = PILOTOS_INFO[key]
                     break
-
             if encontrado:
-                pilotos_list.append(encontrado)
+                nombres.append(encontrado)
             else:
                 errores.append(ap)
 
+    # Si hay errores → no enviar al canal
     if errores:
-        return {"error": f"❌ *Error:* apellido(s) no reconocido(s): {', '.join(errores)}"}
-
-    # Conversión de dorsal a emojis
-    def dorsal_a_emojis(num):
-        mapa = {
-            "0": "0️⃣",
-            "1": "1️⃣",
-            "2": "2️⃣",
-            "3": "3️⃣",
-            "4": "4️⃣",
-            "5": "5️⃣",
-            "6": "6️⃣",
-            "7": "7️⃣",
-            "8": "8️⃣",
-            "9": "9️⃣"
+        return {
+            "error": f"❌ *Error:* apellido(s) no reconocido(s): {', '.join(errores)}"
         }
-        return "".join(mapa[d] for d in str(num))
 
+    # Construcción del mensaje (Formato A)
     medallas = ["🥇", "🥈", "🥉"]
 
-    mensaje = f"🔢 *Top {len(pilotos_list)} actual:* 🔢\n"
+    mensaje = f"🔢 *Top {len(nombres)} actual*  \n"
 
-    if vuelta is not None:
-        mensaje += f"*Vuelta {vuelta}/{RESTO_VUELTAS}*\n\n"
-    else:
-        mensaje += "\n"
+    # Si quieres incluir la vuelta, el bot debe insertarla aquí antes:
+    mensaje += "*Vuelta X/XX*  \n\n"
 
-    # Construir líneas del top
-    for i, (nombre, bandera, dorsal, colores) in enumerate(pilotos_list):
-        dorsal_emoji = dorsal_a_emojis(dorsal)
+    for i, piloto in enumerate(nombres):
+        nombre, bandera, dorsal, colores = piloto  # Datos de cada piloto
+
+        dorsal_emojis = ''.join([f"{num}\N{COMBINING ENCLOSING KEYCAP}" for num in dorsal])
 
         if i < 3:
-            mensaje += f"{medallas[i]} {colores} {bandera} {nombre} {dorsal_emoji}\n"
+            mensaje += f"{medallas[i]} {bandera} {nombre:<18} | {colores} | {dorsal_emojis}\n"
         else:
-            posicion = f"{i+1}⃣"
-            mensaje += f"{posicion} {colores} {bandera} {nombre} {dorsal_emoji}\n"
+            mensaje += f"{i+1}⃣ {bandera} {nombre:<18} | {colores} | {dorsal_emojis}\n"
 
     return {"ok": mensaje.strip()}
 
@@ -277,6 +249,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
