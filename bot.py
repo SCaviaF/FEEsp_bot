@@ -109,34 +109,41 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- FUNCIÓN NUEVA: PROCESA MENSJES 'Top ...' ---
 def generar_top(texto):
-    # Extrae la parte después de "Top"
     lista = texto[3:].strip()
-
-    # Separa por comas
     apellidos = [a.strip().lower() for a in lista.split(",")]
 
     if not (3 <= len(apellidos) <= 5):
-        return None  # No válido
+        return {"error": "La lista debe contener entre 3 y 5 apellidos."}
 
     nombres = []
+    errores = []
+
+    # Comprobamos cada apellido
     for ap in apellidos:
-        if ap in PILOTOS:
-            nombres.append(PILOTOS[ap])
+        if ap in PILOTOS_INFO:
+            nombres.append(PILOTOS_INFO[ap][0])
         else:
-            # Manejo de multi-palabra: "de vries", "da costa"
+            # Detectar variantes como "de vries", "da costa"
             encontrado = None
-            for key in PILOTOS:
+            for key in PILOTOS_INFO:
                 if key.replace(" ", "") == ap.replace(" ", ""):
-                    encontrado = PILOTOS[key]
+                    encontrado = PILOTOS_INFO[key][0]
                     break
+
             if encontrado:
                 nombres.append(encontrado)
             else:
-                nombres.append("Desconocido")
+                errores.append(ap)
 
-    # Construir mensaje Top
+    # Si hay errores → NO SE ENVÍA NADA AL CANAL
+    if errores:
+        return {
+            "error": f"❌ *Error:* apellido(s) no reconocido(s): {', '.join(errores)}"
+        }
+
+    # Construcción normal del Top
     medallas = ["🥇", "🥈", "🥉"]
-    mensaje = f"🔢*Top {len(nombres)} actual:*🔢\n\n"
+    mensaje = f"🔢 *Top {len(nombres)} actual:* 🔢\n\n"
 
     for i, nombre in enumerate(nombres):
         if i < 3:
@@ -144,7 +151,8 @@ def generar_top(texto):
         else:
             mensaje += f"{i+1}⃣ {nombre}\n"
 
-    return mensaje.strip()
+    return {"ok": mensaje.strip()}
+
 
 
 # -------- MANEJO GENERAL DE MENSAJES --------
@@ -164,21 +172,32 @@ async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # NUEVO: detectar formato Top ...
     if text.lower().startswith("top "):
-        response = generar_top(text)
-        if response:
+        result = generar_top(text)
+
+        # Si hay error → responder solo al usuario, NO enviar al canal
+        if "error" in result:
             await update.message.reply_text(
-                response,
+                result["error"],
+                parse_mode='Markdown'
+            )
+            return
+
+        # Si es correcto → enviar normalmente
+        response = result["ok"]
+        await update.message.reply_text(
+            response,
+            parse_mode='Markdown',
+            reply_markup=SUBSCRIBE_BUTTON
+        )
+        if send_to_channel:
+            await context.bot.send_message(
+                chat_id=GROUP_ID,
+                text=response,
                 parse_mode='Markdown',
                 reply_markup=SUBSCRIBE_BUTTON
             )
-            if send_to_channel:
-                await context.bot.send_message(
-                    chat_id=GROUP_ID,
-                    text=response,
-                    parse_mode='Markdown',
-                    reply_markup=SUBSCRIBE_BUTTON
-                )
-            return
+        return
+
 
     # Palabras clave
     key = text.lower()
@@ -223,5 +242,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
