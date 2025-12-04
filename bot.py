@@ -179,12 +179,13 @@ def generar_top(texto):
     # Construir líneas del top
     for i, (nombre, bandera, dorsal, colores) in enumerate(pilotos_list):
         dorsal_emoji = dorsal_a_emojis(dorsal)
-
-        if i < 3:
+        if i = 1:
+            mensaje += f"{medallas[i]} __{nombre}__ {colores} {bandera} {dorsal_emoji}\n"
+        else if i < 3:
             mensaje += f"{medallas[i]} {nombre} {colores} {bandera} {dorsal_emoji}\n"
         else:
             posicion = f"{i+1}⃣"
-            mensaje += f"{posicion} {colores} {nombre} {bandera} {dorsal_emoji}\n"
+            mensaje += f"{posicion} {nombre} {colores} {bandera} {dorsal_emoji}\n"
 
     return {"ok": mensaje.strip()}
 
@@ -200,9 +201,12 @@ async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     send_to_channel = True
 
-    # Si empieza con "not", quitarlo
-    if text.lower().startswith("not"):
-        text = text[3:].strip()
+    # Si el mensaje empieza exactamente con la palabra "not", no enviar al canal
+    first_word = text.strip().lower().split()[0] if text.strip() else ""
+
+    if first_word == "not":
+        import re
+        text = re.sub(r"^not\b", "", text, flags=re.IGNORECASE).strip()
         send_to_channel = False
 
     # NUEVO: detectar formato Top ...
@@ -277,6 +281,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
