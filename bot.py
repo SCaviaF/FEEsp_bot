@@ -101,8 +101,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(
-        "¡Hola! Envíame un mensaje y pondré en negrita el primer párrafo.\n"
-        "Claves: verde, amarilla, roja, safety, finsafety, ultima.",
+        "¡Hola! Aquí un resumen rápido de lo que puedo hacer:\n\n"
+        "• Palabras clave: verde, amarilla, roja, safety, finsafety, ultima → envía emojis y mensajes especiales.\n"
+        "• Formateo de texto: pongo en negrita el primer párrafo de tu mensaje.\n"
+        "• Top pilotos: escribe 'Top [vuelta] Apellido1, Apellido2,...' → genero el top con medallas, colores y dorsales.\n"
+        "• Not: empieza tu mensaje con 'not' para que no se envíe al canal.\n\n"
+        "También añado siempre un botón de suscripción al canal.",
         disable_web_page_preview=True
     )
 
@@ -281,6 +285,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
