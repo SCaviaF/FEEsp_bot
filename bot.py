@@ -50,8 +50,6 @@ async def start_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(message)
 
-application.add_handler(CommandHandler("start", start_bot))
-
 # ==========================
 #   RECEPCIÓN DE MEDIA
 # ==========================
@@ -288,10 +286,12 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(CallbackQueryHandler(callbacks))
     application.add_handler(CommandHandler("cancelar", cancel_scheduled))
+    application.add_handler(CommandHandler("start", start_bot))
 
     application.run_polling()
 
 
 if __name__ == "__main__":
     main()
+
 
