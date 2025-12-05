@@ -27,6 +27,30 @@ user_state = {}  # Memoria temporal por usuario (imagen/video + texto + pasos)
 def allowed(update: Update):
     return update.effective_user and update.effective_user.id == ALLOWED_USER_ID
 
+# ==========================
+#   MENSAJE DE BIENVENIDA
+# ==========================
+
+async def start_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not allowed(update):
+        return
+
+    message = (
+        "👋 ¡Bienvenido al Bot de Gestión de Contenidos!\n\n"
+        "Este bot permite:\n"
+        "1️⃣ Enviar imágenes o vídeos con texto a tu canal.\n"
+        "2️⃣ Clasificar el contenido mediante botones: Noticia, Estadísticas, Manual, Resultados u Otros.\n"
+        "3️⃣ Indicar la fuente del contenido.\n"
+        "4️⃣ Elegir si enviar el contenido inmediatamente o programarlo para una fecha y hora específica.\n"
+        "5️⃣ Cuando se programa un mensaje, recibirás una confirmación con el contenido y la fecha/hora.\n"
+        "6️⃣ Cancelar cualquier mensaje programado antes de que se envíe con el comando /cancelar.\n"
+        "7️⃣ Formato automático: primer párrafo en negrita, hashtags según categoría, enlace de la fuente y botón SUSCRÍBETE.\n\n"
+        "📌 Para comenzar, envía una imagen o vídeo con el texto que quieras publicar."
+    )
+
+    await update.message.reply_text(message)
+
+application.add_handler(CommandHandler("start", start_bot))
 
 # ==========================
 #   RECEPCIÓN DE MEDIA
@@ -270,3 +294,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
