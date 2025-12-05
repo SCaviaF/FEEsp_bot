@@ -11,9 +11,9 @@ from telegram.ext import (
 # ==========================
 #   VARIABLES DE ENTORNO
 # ==========================
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ALLOWED_USER_ID = int(os.getenv("ALLOWED_USER_ID"))
-TARGET_CHANNEL = os.getenv("TARGET_CHANNEL")
+BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
+ALLOWED_USER_ID = int(os.getenv("PERSONAL_ID"))
+TARGET_CHANNEL = os.getenv("CHANNEL_ID")
 
 # ==========================
 #   ESTADOS POR USUARIO
@@ -350,3 +350,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
