@@ -313,7 +313,7 @@ def format_caption(text, category, source, link):
 
     if link and source:
         # Añadir la línea del enlace al final (formateada) — sólo aparece aquí
-        formatted += f"\n🔗 [{source}]({link})"
+        formatted += f"\n\n🔗 [{source}]({link})"
 
     return formatted
 
@@ -439,3 +439,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
