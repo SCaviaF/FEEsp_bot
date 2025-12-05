@@ -1,294 +1,274 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import os
-
-# Diccionario de palabras clave y mensajes predefinidos (todo en negrita)
-KEYWORDS = {
-    "verde": "🟩🟩🟩🟩🟩🟩🟩\n*BANDERA VERDE*\n🟩🟩🟩🟩🟩🟩🟩",
-    "amarilla": "🟨🟨🟨🟨🟨🟨🟨🟨\n*BANDERA AMARILLA*\n🟨🟨🟨🟨🟨🟨🟨🟨",
-    "roja": "🟥🟥🟥🟥🟥🟥\n*BANDERA ROJA*\n🟥🟥🟥🟥🟥🟥",
-    "safety": "🟨🚗🟨🚗🟨\n*SAFETY CAR*\n🟨🚗🟨🚗🟨",
-    "finsafety": "🟩🚗🟩🚗🟩🚗🟩\n*FIN DEL SAFETY CAR*\n🟩🚗🟩🚗🟩🚗🟩",
-    "ultima": "🔄🔄🔄🔄🔄🔄🔄\n*ÚLTIMA VUELTA!!!!*\n🔄🔄🔄🔄🔄🔄🔄",
-}
-
-# -------- PILOTOS COMPLETOS --------
-PILOTOS_INFO = {
-    "müller":  ("Nico Müller",          "🇨🇭", 51, "🟣🟣"),
-    "muller":  ("Nico Müller",          "🇨🇭", 51, "🟣🟣"),
-    "wehrlein":("Pascal Wehrlein",      "🇩🇪", 94, "🟣🟣"),
-
-    "evans":   ("Mitch Evans",          "🇳🇿", 9,  "⚫🟡"),
-    "da costa":("António Félix da Costa","🇵🇹", 13, "⚫🟡"),
-    "costa":   ("António Félix da Costa","🇵🇹", 13, "⚫🟡"),
-
-    "rowland": ("Oliver Rowland",       "🇬🇧", 1,  "🔴⚪"),
-    "nato":    ("Norman Nato",          "🇫🇷", 23, "🔴⚪"),
-
-    "de vries":("Nyck De Vries",        "🇳🇱", 21, "🔴⚫"),
-    "devries": ("Nyck De Vries",        "🇳🇱", 21, "🔴⚫"),
-    "mortara": ("Edoardo Mortara",      "🇨🇭", 48, "🔴⚫"),
-
-    "günther": ("Maximilian Günther",   "🇩🇪", 7,  "🟡⚫"),
-    "gunther": ("Maximilian Günther",   "🇩🇪", 7,  "🟡⚫"),
-    "barnard": ("Taylor Barnard",       "🇬🇧", 77, "🟡⚫"),
-
-    "dennis":  ("Jake Dennis",          "🇬🇧", 27, "🔴⚫"),
-    "drugovich":("Felipe Drugovich",    "🇧🇷", 28, "🔴⚫"),
-
-    "eriksson":("Joel Eriksson",        "🇸🇪", 14, "🟢🔵"),
-    "buemi":   ("Sébastien Buemi",      "🇨🇭", 16, "🟢🔵"),
-
-    "martí":   ("Pepe Martí",           "🇪🇸", 3,  "🟡🟤"),
-    "marti":   ("Pepe Martí",           "🇪🇸", 3,  "🟡🟤"),
-    "tictum":  ("Dan Ticktum",          "🇬🇧", 33, "🟡🟤"),
-    "ticktum": ("Dan Ticktum",          "🇬🇧", 33, "🟡🟤"),
-
-    "di grassi":("Lucas di Grassi",     "🇧🇷", 11, "🟡🔵"),
-    "maloney": ("Zane Maloney",         "🇧🇧", 22, "🟡🔵"),
-
-    "vergne":  ("Jean-Éric Vergne",     "🇫🇷", 25, "🔴🔵"),
-    "cassidy": ("Nick Cassidy",         "🇳🇿", 37, "🔴🔵"),
-    
-    "mul":  ("Nico Müller",          "🇨🇭", 51, "🟣🟣"),
-    "weh":("Pascal Wehrlein",      "🇩🇪", 94, "🟣🟣"),
-
-    "eva":   ("Mitch Evans",          "🇳🇿", 9,  "⚫🟡"),
-    "dac":("António Félix da Costa","🇵🇹", 13, "⚫🟡"),
-
-    "row": ("Oliver Rowland",       "🇬🇧", 1,  "🔴⚪"),
-    "nat":    ("Norman Nato",          "🇫🇷", 23, "🔴⚪"),
-
-    "dev": ("Nyck De Vries",        "🇳🇱", 21, "🔴⚫"),
-    "mor": ("Edoardo Mortara",      "🇨🇭", 48, "🔴⚫"),
-
-    "gun": ("Maximilian Günther",   "🇩🇪", 7,  "🟡⚫"),
-    "bar": ("Taylor Barnard",       "🇬🇧", 77, "🟡⚫"),
-
-    "den":  ("Jake Dennis",          "🇬🇧", 27, "🔴⚫"),
-    "dru":("Felipe Drugovich",    "🇧🇷", 28, "🔴⚫"),
-
-    "eri":("Joel Eriksson",        "🇸🇪", 14, "🟢🔵"),
-    "bue":   ("Sébastien Buemi",      "🇨🇭", 16, "🟢🔵"),
-
-    "mar":   ("Pepe Martí",           "🇪🇸", 3,  "🟡🟤"),
-    "tic": ("Dan Ticktum",          "🇬🇧", 33, "🟡🟤"),
-
-    "dig":     ("Lucas di Grassi",      "🇧🇷", 11, "🟡🔵"),
-    "mal": ("Zane Maloney",         "🇧🇧", 22, "🟡🔵"),
-
-    "ver":  ("Jean-Éric Vergne",     "🇫🇷", 25, "🔴🔵"),
-    "cas": ("Nick Cassidy",         "🇳🇿", 37, "🔴🔵"),
-}
-
-# Botón inline que se añade debajo de los mensajes
-SUBSCRIBE_BUTTON = InlineKeyboardMarkup(
-    [[InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]]
+from datetime import datetime, timedelta
+from telegram import (
+    Update, InlineKeyboardMarkup, InlineKeyboardButton,
+    InputMediaPhoto, InputMediaVideo
+)
+from telegram.ext import (
+    ApplicationBuilder, MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters
 )
 
-# ID del grupo donde se publicarán los mensajes
-GROUP_ID = os.getenv("CHANNEL_ID")
+# ==========================
+#   VARIABLES DE ENTORNO
+# ==========================
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ALLOWED_USER_ID = int(os.getenv("ALLOWED_USER_ID"))
+TARGET_CHANNEL = os.getenv("TARGET_CHANNEL")  # Ejemplo: "@FormulaEEsp"
 
-# Lista blanca de usuarios
-PERSONAL_ID = int(os.getenv("PERSONAL_ID", "0"))
-ALLOWED_USERS = [PERSONAL_ID]
+# ==========================
+#   SESIÓN DE USUARIO
+# ==========================
+user_state = {}  # Memoria temporal por usuario (imagen/video + texto + pasos)
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id not in ALLOWED_USERS:
-        await update.message.reply_text("❌ No tienes permiso para usar este bot.")
+# ==========================
+#   CHECK DE PERMISOS
+# ==========================
+def allowed(update: Update):
+    """Devuelve True si el usuario es el autorizado."""
+    return update.effective_user and update.effective_user.id == ALLOWED_USER_ID
+
+
+# ==========================
+#   RECEPCIÓN DE MEDIA
+# ==========================
+async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if not allowed(update):
         return
 
-    await update.message.reply_text(
-        "¡Hola! Aquí un resumen rápido de lo que puedo hacer:\n\n"
-        "• Palabras clave: verde, amarilla, roja, safety, finsafety, ultima → envía emojis y mensajes especiales.\n"
-        "• Formateo de texto: pongo en negrita el primer párrafo de tu mensaje.\n"
-        "• Top pilotos: escribe 'Top [vuelta] Apellido1, Apellido2,...' → genero el top con medallas, colores y dorsales.\n"
-        "• Not: empieza tu mensaje con 'not' para que no se envíe al canal.\n\n"
-        "También añado siempre un botón de suscripción al canal.",
-        disable_web_page_preview=True
-    )
+    message = update.message
 
-
-# --- FUNCIÓN NUEVA: PROCESA MENSJES 'Top ...' ---
-def generar_top(texto):
-    RESTO_VUELTAS = 33  # EDITA AQUÍ EL TOTAL DE VUELTAS
-
-    # Quitar "Top"
-    contenido = texto[3:].strip()
-
-    # Detectar si empieza con número de vuelta
-    partes = contenido.split(" ", 1)
-
-    vuelta = None
-    if partes[0].isdigit():  # Top 25 ...
-        vuelta = int(partes[0])
-        if len(partes) == 1:
-            return {"error": "Debes escribir apellidos después del número."}
-        contenido = partes[1].strip()
-
-    # Separar apellidos
-    apellidos = [a.strip().lower() for a in contenido.split(",")]
-
-    if not (3 <= len(apellidos) <= 5):
-        return {"error": "La lista debe contener entre *3 y 5 apellidos*."}
-
-    pilotos_list = []
-    errores = []
-
-    for ap in apellidos:
-        if ap in PILOTOS_INFO:
-            pilotos_list.append(PILOTOS_INFO[ap])
-        else:
-            encontrado = None
-            for key in PILOTOS_INFO:
-                if key.replace(" ", "") == ap.replace(" ", ""):
-                    encontrado = PILOTOS_INFO[key]
-                    break
-
-            if encontrado:
-                pilotos_list.append(encontrado)
-            else:
-                errores.append(ap)
-
-    if errores:
-        return {"error": f"❌ *Error:* apellido(s) no reconocido(s): {', '.join(errores)}"}
-
-    # Conversión de dorsal a emojis
-    def dorsal_a_emojis(num):
-        mapa = {
-            "0": "0️⃣",
-            "1": "1️⃣",
-            "2": "2️⃣",
-            "3": "3️⃣",
-            "4": "4️⃣",
-            "5": "5️⃣",
-            "6": "6️⃣",
-            "7": "7️⃣",
-            "8": "8️⃣",
-            "9": "9️⃣"
-        }
-        return "".join(mapa[d] for d in str(num))
-
-    medallas = ["🥇", "🥈", "🥉"]
-
-    mensaje = f"🔢 *Top {len(pilotos_list)} actual:* 🔢\n"
-
-    if vuelta is not None:
-        mensaje += f"Vuelta {vuelta}/{RESTO_VUELTAS}\n\n"
+    # Imagen
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        media_type = "photo"
+    # Vídeo
+    elif message.video:
+        file_id = message.video.file_id
+        media_type = "video"
     else:
-        mensaje += "\n"
-
-    # Construir líneas del top
-    for i, (nombre, bandera, dorsal, colores) in enumerate(pilotos_list):
-        dorsal_emoji = dorsal_a_emojis(dorsal)
-        if i == 1:
-            mensaje += f"{medallas[i]} __{nombre}__ {colores} {bandera} {dorsal_emoji}\n"
-        elif i < 3:
-            mensaje += f"{medallas[i]} {nombre} {colores} {bandera} {dorsal_emoji}\n"
-        else:
-            posicion = f"{i+1}⃣"
-            mensaje += f"{posicion} {nombre} {colores} {bandera} {dorsal_emoji}\n"
-
-    return {"ok": mensaje.strip()}
-
-
-
-# -------- MANEJO GENERAL DE MENSAJES --------
-async def format_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if user_id not in ALLOWED_USERS:
-        await update.message.reply_text("❌ No tienes permiso para usar este bot.")
+        await message.reply_text("Envíame una imagen o un vídeo con el texto.")
         return
 
-    text = update.message.text.strip()
-    send_to_channel = True
+    if not message.caption:
+        await message.reply_text("Incluye un texto en el mensaje con la imagen o video.")
+        return
 
-    # Si el mensaje empieza exactamente con la palabra "not", no enviar al canal
-    first_word = text.strip().lower().split()[0] if text.strip() else ""
+    user_id = update.effective_user.id
 
-    if first_word == "not":
-        import re
-        text = re.sub(r"^not\b", "", text, flags=re.IGNORECASE).strip()
-        send_to_channel = False
+    # Guardamos el estado inicial
+    user_state[user_id] = {
+        "media_type": media_type,
+        "file_id": file_id,
+        "caption": message.caption,
+        "category": None,
+        "source": None,
+        "schedule": None
+    }
 
-    # NUEVO: detectar formato Top ...
-    if text.lower().startswith("top "):
-        result = generar_top(text)
+    # Preguntar categoría
+    keyboard = [
+        [
+            InlineKeyboardButton("Noticia", callback_data="cat_Noticia"),
+            InlineKeyboardButton("Estadísticas", callback_data="cat_Estadísticas"),
+        ],
+        [
+            InlineKeyboardButton("Manual", callback_data="cat_Manual"),
+            InlineKeyboardButton("Resultados", callback_data="cat_Resultados"),
+        ],
+        [InlineKeyboardButton("Otros", callback_data="cat_Otros")]
+    ]
 
-        # Si hay error → responder solo al usuario, NO enviar al canal
-        if "error" in result:
-            await update.message.reply_text(
-                result["error"],
-                parse_mode='Markdown'
+    await message.reply_text("¿Qué tipo de contenido es?", reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+# ==========================
+#   CALLBACK DE BOTONES
+# ==========================
+async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not allowed(update):
+        return
+
+    user_id = update.effective_user.id
+    state = user_state.get(user_id)
+
+    if not state:
+        await query.edit_message_text("No hay sesión activa. Envíame otra imagen o vídeo.")
+        return
+
+    data = query.data
+
+    # Elegir categoría
+    if data.startswith("cat_"):
+        category = data.replace("cat_", "")
+        state["category"] = category
+
+        await query.edit_message_text(
+            f"Categoría seleccionada: {category}\n\nEscribe ahora el nombre de la **fuente**."
+        )
+        return
+
+    # Elegir envío ahora o programar
+    if data.startswith("send_"):
+        action = data.replace("send_", "")
+
+        if action == "now":
+            await send_post(update, context, scheduled=False)
+        else:
+            state["schedule"] = True
+            await query.edit_message_text(
+                "Mensaje programado para +2 minutos."
             )
-            return
+            await schedule_post(context, user_id)
 
-        # Si es correcto → enviar normalmente
-        response = result["ok"]
+        return
+
+
+# ==========================
+#   MANEJAR TEXTO COMO “FUENTE”
+# ==========================
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if not allowed(update):
+        return
+
+    user_id = update.effective_user.id
+    state = user_state.get(user_id)
+
+    # Solo se interpreta como fuente si estamos en ese paso
+    if state and state["category"] and state["source"] is None:
+        state["source"] = update.message.text
+
+        # Preguntar si enviar ahora o programar
+        keyboard = [
+            [
+                InlineKeyboardButton("Enviar ahora", callback_data="send_now"),
+                InlineKeyboardButton("Programar", callback_data="send_later"),
+            ]
+        ]
+
         await update.message.reply_text(
-            response,
-            parse_mode='Markdown',
-            reply_markup=SUBSCRIBE_BUTTON
+            f"Fuente guardada: {state['source']}\n\n¿Enviar ahora o programar?",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        if send_to_channel:
-            await context.bot.send_message(
-                chat_id=GROUP_ID,
-                text=response,
-                parse_mode='Markdown',
-                reply_markup=SUBSCRIBE_BUTTON
-            )
         return
 
 
-    # Palabras clave
-    key = text.lower()
-    if key in KEYWORDS:
-        response = KEYWORDS[key]
+# ==========================
+#   FORMATEO DEL TEXTO
+# ==========================
+def format_caption(original_text, category, source):
+    paragraphs = original_text.strip().split("\n")
+    first_bold = f"*{paragraphs[0]}*"
+    rest = "\n".join(paragraphs[1:])
+
+    final_text = first_bold
+    if rest:
+        final_text += "\n" + rest
+
+    # Hashtag
+    hashtags = {
+        "Noticia": "#Noticia",
+        "Estadísticas": "#Estadísticas",
+        "Manual": "#ManualFE",
+        "Resultados": "#Resultados",
+        "Otros": ""
+    }
+
+    tag = hashtags.get(category, "")
+    if tag:
+        final_text += f"\n\n{tag}"
+
+    # Añadir enlace si lo hay
+    link = ""
+    for word in original_text.split():
+        if word.startswith("http://") or word.startswith("https://"):
+            link = word
+
+    if link:
+        final_text += f"\n🔗 [{source}]({link})"
+
+    return final_text
+
+
+# ==========================
+#   ENVÍO DEL POST
+# ==========================
+async def send_post(update: Update, context: ContextTypes.DEFAULT_TYPE, scheduled=False):
+    user_id = update.effective_user.id
+    state = user_state.get(user_id)
+
+    if not state:
+        return
+
+    formatted = format_caption(state["caption"], state["category"], state["source"])
+
+    # Botón SUSCRÍBETE
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]
+    ])
+
+    if state["media_type"] == "photo":
+        await context.bot.send_photo(
+            chat_id=TARGET_CHANNEL,
+            photo=state["file_id"],
+            caption=formatted,
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
     else:
-        # Formato normal: negrita en el primer párrafo
-        paragraphs = text.split("\n\n")
-        if paragraphs:
-            paragraphs[0] = f"*{paragraphs[0]}*"
-        response = "\n\n".join(paragraphs)
-
-    # Enviar siempre al usuario
-    await update.message.reply_text(
-        response,
-        parse_mode='Markdown',
-        disable_web_page_preview=True,
-        reply_markup=SUBSCRIBE_BUTTON
-    )
-
-    if send_to_channel:
-        await context.bot.send_message(
-            chat_id=GROUP_ID,
-            text=response,
-            parse_mode='Markdown',
-            disable_web_page_preview=True,
-            reply_markup=SUBSCRIBE_BUTTON
+        await context.bot.send_video(
+            chat_id=TARGET_CHANNEL,
+            video=state["file_id"],
+            caption=formatted,
+            parse_mode="Markdown",
+            reply_markup=keyboard
         )
 
+    # Confirmación solo al usuario
+    if not scheduled:
+        await update.callback_query.edit_message_text("✔ Publicado en el canal.")
 
-# -------- MAIN --------
+    user_state.pop(user_id, None)
+
+
+# ==========================
+#   PROGRAMAR ENVÍO
+# ==========================
+async def schedule_post(context: ContextTypes.DEFAULT_TYPE, user_id):
+    await context.job_queue.run_once(
+        scheduled_job,
+        when=timedelta(minutes=2),
+        chat_id=user_id,
+        name=f"job_{user_id}"
+    )
+
+
+async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    user_id = job.chat_id
+
+    fake_update = type("obj", (object,), {"effective_user": type("obj2", (object,), {"id": user_id})})
+    await send_post(fake_update, context, scheduled=True)
+
+
+# ==========================
+#   MAIN
+# ==========================
 def main():
-    TOKEN = os.getenv("TELEGRAM_TOKEN")
-    app = ApplicationBuilder().token(TOKEN).build()
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, format_message))
+    application.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, handle_media))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    application.add_handler(CallbackQueryHandler(callbacks))
 
-    print("Bot corriendo...")
-    app.run_polling()
+    application.run_polling()
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
