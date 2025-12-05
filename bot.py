@@ -5,7 +5,7 @@ from telegram import (
 )
 from telegram.ext import (
     ApplicationBuilder, MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters
+    CommandHandler, ContextTypes, filters
 )
 
 # ==========================
@@ -30,13 +30,42 @@ def allowed(update: Update):
 
 
 # ==========================
-#   EXTRAER LINK
+#   EXTRAER LINK Y LIMPIARLO DEL TEXTO
 # ==========================
-def extract_link(text):
-    for word in text.split():
-        if word.startswith("http://") or word.startswith("https://"):
-            return word
-    return None
+def extract_and_strip_link(text):
+    words = text.split()
+    link = None
+    cleaned_words = []
+
+    for w in words:
+        if w.startswith("http://") or w.startswith("https://"):
+            link = w
+        else:
+            cleaned_words.append(w)
+
+    cleaned_text = " ".join(cleaned_words)
+    return cleaned_text, link
+
+
+# ==========================
+#   /start
+# ==========================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not allowed(update):
+        return
+
+    text = (
+        "👋 *Bienvenido a tu bot de publicación*\n\n"
+        "Este bot te permite:\n"
+        "• Enviar fotos, vídeos o álbumes\n"
+        "• Detectar y formatear enlaces automáticamente\n"
+        "• Preguntar tipo de contenido y fuente\n"
+        "• Crear vista previa antes de publicar\n"
+        "• Elegir entre *Enviar ahora* o *Enviar después*\n\n"
+        "Envíame una imagen o un vídeo con texto para comenzar."
+    )
+
+    await update.message.reply_text(text, parse_mode="Markdown")
 
 
 # ==========================
@@ -57,11 +86,15 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
         group_id = msg.media_group_id
 
         if group_id not in media_groups:
+            caption = msg.caption or ""
+            cleaned_caption, detected_link = extract_and_strip_link(caption)
+
             media_groups[group_id] = {
                 "files": [],
-                "caption": msg.caption if msg.caption else "",
+                "caption": cleaned_caption,
+                "link": detected_link,
                 "complete": False,
-                "user_id": update.effective_user.id
+                "user_id": update.effective_user.id,
             }
 
         # Añadir archivo
@@ -74,7 +107,6 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
             media_groups[group_id]["files"].append(("video", file_id))
 
         # Detectar si ya llegó todo el álbum
-        # Telegram no envía "fin", así que usamos un pequeño retraso
         async def finalize_album(context):
             if group_id in media_groups and not media_groups[group_id]["complete"]:
                 media_groups[group_id]["complete"] = True
@@ -84,7 +116,7 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ==========================
-    #   MENSAJE NORMAL (1 foto o 1 vídeo)
+    #   MENSAJE NORMAL (1 foto / 1 vídeo)
     # ==========================
     if msg.photo:
         files = [("photo", msg.photo[-1].file_id)]
@@ -94,9 +126,9 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("Envíame una imagen o un vídeo.")
         return
 
-    caption = msg.caption or ""
+    cleaned_caption, detected_link = extract_and_strip_link(msg.caption or "")
 
-    await process_new_media(update, context, files, caption)
+    await process_new_media(update, context, files, cleaned_caption, detected_link)
 
 
 # ==========================
@@ -108,17 +140,18 @@ async def process_full_album(update: Update, context, group_id):
 
     files = group["files"]
     caption = group["caption"]
+    link = group["link"]
     user_id = group["user_id"]
 
     del media_groups[group_id]
 
-    await process_new_media(update, context, files, caption)
+    await process_new_media(update, context, files, caption, link)
 
 
 # ==========================
 #   PROCESAR MEDIA NORMAL O ÁLBUM
 # ==========================
-async def process_new_media(update, context, files, caption):
+async def process_new_media(update, context, files, caption, link):
 
     user_id = update.effective_user.id
 
@@ -127,7 +160,7 @@ async def process_new_media(update, context, files, caption):
         "caption": caption,
         "category": None,
         "source": None,
-        "link": extract_link(caption),
+        "link": link,
     }
 
     # Pregunta categoría
@@ -168,23 +201,23 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state["category"] = data.replace("cat_", "")
 
         if not state["link"]:
-            # Sin link → vista previa directamente
             await show_preview_after_category(update, context)
             return
 
-        # Con link → pedir fuente
+        # Tiene link → pedir fuente
         keyboard = [
             [InlineKeyboardButton("Twitter FE", callback_data="src_TwitterFE")]
         ]
 
         await query.edit_message_text(
-            "He detectado un enlace.\n\nEscribe la **fuente** o elige una:",
+            "He detectado un enlace.\n\nEscribe la *fuente* o elige una:",
+            parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
 
     if data == "src_TwitterFE":
-        state["source"] = "Twitter Formula E"
+        state["source"] = "Twitter FE"
         await show_preview_after_category(update, context)
         return
 
@@ -237,7 +270,7 @@ def format_caption(text, category, source, link):
         formatted += f"\n\n{tag}"
 
     if link and source:
-        formatted += f"\n\n🔗 [{source}]({link})"
+        formatted += f"\n🔗 [{source}]({link})"
 
     return formatted
 
@@ -254,13 +287,8 @@ async def show_preview_after_category(update, context):
         state["caption"], state["category"], state["source"], state["link"]
     )
 
-    # 🔥 AQUÍ ESTÁ EL FIX IMPORTANTE
+    # 🔥 FIX: origen dinámico
     origin = update.message or update.callback_query.message
-
-    # Botón suscríbete
-    subscribe_btn = InlineKeyboardMarkup([
-        [InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]
-    ])
 
     # Álbum
     if len(state["files"]) > 1:
@@ -279,6 +307,7 @@ async def show_preview_after_category(update, context):
 
         await origin.reply_media_group(media)
 
+    # Mensaje simple
     else:
         mtype, fid = state["files"][0]
         if mtype == "photo":
@@ -344,6 +373,7 @@ async def send_to_channel(update, context):
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, handle_media))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(CallbackQueryHandler(callbacks))
@@ -353,6 +383,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
