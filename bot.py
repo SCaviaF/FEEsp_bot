@@ -184,7 +184,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "src_TwitterFE":
-        state["source"] = "Twitter FE"
+        state["source"] = "Twitter Formula E"
         await show_preview_after_category(update, context)
         return
 
@@ -237,7 +237,7 @@ def format_caption(text, category, source, link):
         formatted += f"\n\n{tag}"
 
     if link and source:
-        formatted += f"\n🔗 [{source}]({link})"
+        formatted += f"\n\n🔗 [{source}]({link})"
 
     return formatted
 
@@ -353,5 +353,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
