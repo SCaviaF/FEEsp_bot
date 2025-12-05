@@ -1,4 +1,5 @@
 import os
+import re
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
     InputMediaPhoto, InputMediaVideo
@@ -19,7 +20,7 @@ TARGET_CHANNEL = os.getenv("CHANNEL_ID")
 #   ESTADOS POR USUARIO
 # ==========================
 user_state = {}
-media_groups = {}  # <media_group_id>: { "files": [], "caption": "", "complete": False }
+media_groups = {}  # <media_group_id>: { "files": [], "caption": "", "link": "", "user_id": "" }
 
 
 # ==========================
@@ -30,21 +31,38 @@ def allowed(update: Update):
 
 
 # ==========================
-#   EXTRAER LINK Y LIMPIARLO DEL TEXTO
+#   EXTRAER LINK Y LIMPIARLO (PRESERVANDO SALTOS DE LÍNEA)
 # ==========================
-def extract_and_strip_link(text):
-    words = text.split()
-    link = None
-    cleaned_words = []
+URL_RE = re.compile(r'(https?://\S+)', re.IGNORECASE)
 
-    for w in words:
-        if w.startswith("http://") or w.startswith("https://"):
-            link = w
-        else:
-            cleaned_words.append(w)
 
-    cleaned_text = " ".join(cleaned_words)
-    return cleaned_text, link
+def extract_and_strip_link(text: str):
+    """
+    Devuelve (cleaned_text, link)
+    - Si hay un link (la primera coincidencia), lo extrae y lo elimina del texto
+    - Preserva saltos de línea en el texto devuelto
+    """
+    if not text:
+        return text, None
+
+    m = URL_RE.search(text)
+    if not m:
+        return text, None
+
+    link = m.group(1)
+
+    # Eliminar solo la ocurrencia exacta del link
+    cleaned = text.replace(link, "")
+
+    # Quitar espacios múltiples pero mantener saltos de línea:
+    # - colapsar espacios/tabs dentro de líneas
+    cleaned = re.sub(r'[ \t]+', ' ', cleaned)
+    # - limpiar finales de línea
+    cleaned = "\n".join(line.rstrip() for line in cleaned.splitlines())
+    # - eliminar líneas vacías múltiples al inicio/final
+    cleaned = cleaned.strip()
+
+    return cleaned, link
 
 
 # ==========================
@@ -56,13 +74,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         "👋 *Bienvenido a tu bot de publicación*\n\n"
-        "Este bot te permite:\n"
+        "Funciones breves:\n"
         "• Enviar fotos, vídeos o álbumes\n"
-        "• Detectar y formatear enlaces automáticamente\n"
-        "• Preguntar tipo de contenido y fuente\n"
-        "• Crear vista previa antes de publicar\n"
-        "• Elegir entre *Enviar ahora* o *Enviar después*\n\n"
-        "Envíame una imagen o un vídeo con texto para comenzar."
+        "• Detecta enlaces y los mueve al final formateados\n"
+        "• Pregunta tipo de contenido y (si hay link) la fuente\n"
+        "• Vista previa antes de publicar\n"
+        "• Elegir: *Enviar ahora* o *Enviar después*\n\n"
+        "Envíame una imagen, vídeo o álbum con texto para comenzar."
     )
 
     await update.message.reply_text(text, parse_mode="Markdown")
@@ -97,7 +115,7 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "user_id": update.effective_user.id,
             }
 
-        # Añadir archivo
+        # Añadir archivo al grupo
         if msg.photo:
             file_id = msg.photo[-1].file_id
             media_groups[group_id]["files"].append(("photo", file_id))
@@ -106,12 +124,13 @@ async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file_id = msg.video.file_id
             media_groups[group_id]["files"].append(("video", file_id))
 
-        # Detectar si ya llegó todo el álbum
+        # Telegram no indica fin del álbum; finalizamos en la siguiente iteración ligera
         async def finalize_album(context):
             if group_id in media_groups and not media_groups[group_id]["complete"]:
                 media_groups[group_id]["complete"] = True
                 await process_full_album(update, context, group_id)
 
+        # schedule as task (quick)
         context.application.create_task(finalize_album(context))
         return
 
@@ -143,6 +162,7 @@ async def process_full_album(update: Update, context, group_id):
     link = group["link"]
     user_id = group["user_id"]
 
+    # borrar estado de grupo
     del media_groups[group_id]
 
     await process_new_media(update, context, files, caption, link)
@@ -197,6 +217,10 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = user_state.get(user_id)
     data = query.data
 
+    if not state:
+        await query.edit_message_text("No hay ninguna publicación en proceso.")
+        return
+
     if data.startswith("cat_"):
         state["category"] = data.replace("cat_", "")
 
@@ -204,7 +228,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_preview_after_category(update, context)
             return
 
-        # Tiene link → pedir fuente
+        # Tiene link → pedir fuente (opción rápida Twitter FE)
         keyboard = [
             [InlineKeyboardButton("Twitter FE", callback_data="src_TwitterFE")]
         ]
@@ -228,6 +252,7 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data == "send_later":
+        # eliminar botones de la vista previa y dejar la vista previa como está
         await query.edit_message_text("Vista previa generada. Puedes reenviarla cuando quieras.")
         return
 
@@ -243,19 +268,36 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     state = user_state.get(user_id)
 
-    if state and state["link"] and state["source"] is None:
+    # Si estamos pidiendo fuente (hay link y aún no hay source)
+    if state and state.get("link") and state.get("source") is None:
         state["source"] = update.message.text
         await show_preview_after_category(update, context)
 
 
 # ==========================
-#   FORMATEAR CAPTION
+#   FORMATEAR CAPTION (PRIMER PÁRRAFO EN NEGRITA, RESTO CON SALTOS)
 # ==========================
 def format_caption(text, category, source, link):
-    parts = text.split("\n")
-    formatted = f"*{parts[0]}*"
-    if len(parts) > 1:
-        formatted += "\n" + "\n".join(parts[1:])
+    """
+    - Mantiene saltos de línea.
+    - Pone en negrita el primer párrafo (definido como el bloque antes de la primera línea vacía).
+    - Añade hashtag y línea de enlace formateada si procede.
+    """
+    if not text:
+        first = ""
+        rest = ""
+    else:
+        # Separar por párrafos (bloques separados por línea vacía)
+        parts = text.split("\n\n", 1)
+        first = parts[0].strip()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+
+    formatted = ""
+    if first:
+        formatted += f"*{first}*"
+    if rest:
+        # conservar el doble salto que separa párrafos
+        formatted += "\n\n" + rest
 
     hashtags = {
         "Noticia": "#Noticia",
@@ -270,13 +312,14 @@ def format_caption(text, category, source, link):
         formatted += f"\n\n{tag}"
 
     if link and source:
+        # Añadir la línea del enlace al final (formateada) — sólo aparece aquí
         formatted += f"\n🔗 [{source}]({link})"
 
     return formatted
 
 
 # ==========================
-#   MOSTRAR VISTA PREVIA
+#   MOSTRAR VISTA PREVIA (ORIGEN DINÁMICO) + BOTÓN SUSCRÍBETE
 # ==========================
 async def show_preview_after_category(update, context):
 
@@ -287,10 +330,15 @@ async def show_preview_after_category(update, context):
         state["caption"], state["category"], state["source"], state["link"]
     )
 
-    # 🔥 FIX: origen dinámico
-    origin = update.message or update.callback_query.message
+    # FIX: origen puede ser message o callback_query.message
+    origin = update.message or (update.callback_query and update.callback_query.message)
 
-    # Álbum
+    # Botón SUSCRÍBETE (como mensaje separado cuando sea un álbum)
+    subscribe_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]
+    ])
+
+    # Preparar media (álbum o único)
     if len(state["files"]) > 1:
         media = []
         for idx, (mtype, fid) in enumerate(state["files"]):
@@ -305,17 +353,19 @@ async def show_preview_after_category(update, context):
                 else:
                     media.append(InputMediaVideo(fid))
 
+        # Enviar álbum (no admite reply_markup). Luego enviar botón SUSCRÍBETE en mensaje separado.
         await origin.reply_media_group(media)
+        await origin.reply_text("🔔 Suscríbete:", reply_markup=subscribe_kb)
 
-    # Mensaje simple
     else:
         mtype, fid = state["files"][0]
         if mtype == "photo":
-            await origin.reply_photo(fid, caption=formatted, parse_mode="Markdown")
+            # send_photo admite reply_markup
+            await origin.reply_photo(fid, caption=formatted, parse_mode="Markdown", reply_markup=subscribe_kb)
         else:
-            await origin.reply_video(fid, caption=formatted, parse_mode="Markdown")
+            await origin.reply_video(fid, caption=formatted, parse_mode="Markdown", reply_markup=subscribe_kb)
 
-    # Botones enviar ahora / después
+    # Botones enviar ahora / después (separados)
     keyboard = [
         [
             InlineKeyboardButton("Enviar ahora", callback_data="send_now"),
@@ -330,7 +380,7 @@ async def show_preview_after_category(update, context):
 
 
 # ==========================
-#   ENVIAR AL CANAL
+#   ENVIAR AL CANAL (INCLUYE SUSCRÍBETE)
 # ==========================
 async def send_to_channel(update, context):
 
@@ -340,6 +390,10 @@ async def send_to_channel(update, context):
     formatted = format_caption(
         state["caption"], state["category"], state["source"], state["link"]
     )
+
+    subscribe_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]
+    ])
 
     # Álbum
     if len(state["files"]) > 1:
@@ -356,15 +410,17 @@ async def send_to_channel(update, context):
                 else:
                     media.append(InputMediaVideo(fid))
 
+        # send_media_group no acepta reply_markup → enviamos grupo y luego mensaje con botón
         await context.bot.send_media_group(TARGET_CHANNEL, media)
+        await context.bot.send_message(chat_id=TARGET_CHANNEL, text="🔔 Suscríbete:", reply_markup=subscribe_kb)
 
     # Mensaje simple
     else:
         mtype, fid = state["files"][0]
         if mtype == "photo":
-            await context.bot.send_photo(TARGET_CHANNEL, fid, caption=formatted, parse_mode="Markdown")
+            await context.bot.send_photo(chat_id=TARGET_CHANNEL, photo=fid, caption=formatted, parse_mode="Markdown", reply_markup=subscribe_kb)
         else:
-            await context.bot.send_video(TARGET_CHANNEL, fid, caption=formatted, parse_mode="Markdown")
+            await context.bot.send_video(chat_id=TARGET_CHANNEL, video=fid, caption=formatted, parse_mode="Markdown", reply_markup=subscribe_kb)
 
 
 # ==========================
