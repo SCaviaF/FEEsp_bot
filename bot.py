@@ -1,105 +1,159 @@
 import os
-from datetime import datetime, timedelta
 from telegram import (
-    Update, InlineKeyboardMarkup, InlineKeyboardButton
+    Update, InlineKeyboardMarkup, InlineKeyboardButton,
+    InputMediaPhoto, InputMediaVideo
 )
 from telegram.ext import (
     ApplicationBuilder, MessageHandler, CallbackQueryHandler,
-    ContextTypes, CommandHandler, filters
+    ContextTypes, filters
 )
 
 # ==========================
 #   VARIABLES DE ENTORNO
 # ==========================
-BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
-ALLOWED_USER_ID = int(os.getenv("PERSONAL_ID"))
-TARGET_CHANNEL = os.getenv("CHANNEL_ID")  # Ejemplo: "@FormulaEEsp"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ALLOWED_USER_ID = int(os.getenv("ALLOWED_USER_ID"))
+TARGET_CHANNEL = os.getenv("TARGET_CHANNEL")
 
 # ==========================
-#   SESIÓN DE USUARIO
+#   ESTADOS POR USUARIO
 # ==========================
-user_state = {}  # Memoria temporal por usuario (imagen/video + texto + pasos)
+user_state = {}
+media_groups = {}  # <media_group_id>: { "files": [], "caption": "", "complete": False }
 
 
 # ==========================
-#   CHECK DE PERMISOS
+#   PERMISO
 # ==========================
 def allowed(update: Update):
     return update.effective_user and update.effective_user.id == ALLOWED_USER_ID
 
-# ==========================
-#   MENSAJE DE BIENVENIDA
-# ==========================
-
-async def start_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not allowed(update):
-        return
-
-    message = (
-        "👋 ¡Bienvenido al Bot de Gestión de Contenidos!\n\n"
-        "Este bot permite:\n"
-        "1️⃣ Enviar imágenes o vídeos con texto a tu canal.\n"
-        "2️⃣ Clasificar el contenido mediante botones: Noticia, Estadísticas, Manual, Resultados u Otros.\n"
-        "3️⃣ Indicar la fuente del contenido.\n"
-        "4️⃣ Elegir si enviar el contenido inmediatamente o programarlo para una fecha y hora específica.\n"
-        "5️⃣ Cuando se programa un mensaje, recibirás una confirmación con el contenido y la fecha/hora.\n"
-        "6️⃣ Cancelar cualquier mensaje programado antes de que se envíe con el comando /cancelar.\n"
-        "7️⃣ Formato automático: primer párrafo en negrita, hashtags según categoría, enlace de la fuente y botón SUSCRÍBETE.\n\n"
-        "📌 Para comenzar, envía una imagen o vídeo con el texto que quieras publicar."
-    )
-
-    await update.message.reply_text(message)
 
 # ==========================
-#   RECEPCIÓN DE MEDIA
+#   EXTRAER LINK
+# ==========================
+def extract_link(text):
+    for word in text.split():
+        if word.startswith("http://") or word.startswith("https://"):
+            return word
+    return None
+
+
+# ==========================
+#   MANEJAR MEDIA (INCLUYE ÁLBUMES)
 # ==========================
 async def handle_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     if not allowed(update):
         return
 
-    message = update.message
+    msg = update.message
 
-    if message.photo:
-        file_id = message.photo[-1].file_id
-        media_type = "photo"
-    elif message.video:
-        file_id = message.video.file_id
-        media_type = "video"
+    # ==========================
+    #     ÁLBUM (media group)
+    # ==========================
+    if msg.media_group_id:
+
+        group_id = msg.media_group_id
+
+        if group_id not in media_groups:
+            media_groups[group_id] = {
+                "files": [],
+                "caption": msg.caption if msg.caption else "",
+                "complete": False,
+                "user_id": update.effective_user.id
+            }
+
+        # Añadir archivo
+        if msg.photo:
+            file_id = msg.photo[-1].file_id
+            media_groups[group_id]["files"].append(("photo", file_id))
+
+        elif msg.video:
+            file_id = msg.video.file_id
+            media_groups[group_id]["files"].append(("video", file_id))
+
+        # Detectar si ya llegó todo el álbum
+        # Telegram no envía "fin", así que usamos un pequeño retraso
+        async def finalize_album(context):
+            if group_id in media_groups and not media_groups[group_id]["complete"]:
+                media_groups[group_id]["complete"] = True
+                await process_full_album(update, context, group_id)
+
+        context.application.create_task(finalize_album(context))
+        return
+
+    # ==========================
+    #   MENSAJE NORMAL (1 foto o 1 vídeo)
+    # ==========================
+    if msg.photo:
+        files = [("photo", msg.photo[-1].file_id)]
+    elif msg.video:
+        files = [("video", msg.video.file_id)]
     else:
-        await message.reply_text("Envíame una imagen o un vídeo con el texto.")
+        await msg.reply_text("Envíame una imagen o un vídeo.")
         return
 
-    if not message.caption:
-        await message.reply_text("Incluye un texto en el mensaje con la imagen o video.")
-        return
+    caption = msg.caption or ""
+
+    await process_new_media(update, context, files, caption)
+
+
+# ==========================
+#   PROCESAR ÁLBUM COMPLETO
+# ==========================
+async def process_full_album(update: Update, context, group_id):
+
+    group = media_groups[group_id]
+
+    files = group["files"]
+    caption = group["caption"]
+    user_id = group["user_id"]
+
+    del media_groups[group_id]
+
+    await process_new_media(update, context, files, caption)
+
+
+# ==========================
+#   PROCESAR MEDIA NORMAL O ÁLBUM
+# ==========================
+async def process_new_media(update, context, files, caption):
 
     user_id = update.effective_user.id
 
     user_state[user_id] = {
-        "media_type": media_type,
-        "file_id": file_id,
-        "caption": message.caption,
+        "files": files,
+        "caption": caption,
         "category": None,
         "source": None,
-        "schedule_datetime": None,
-        "job": None
+        "link": extract_link(caption),
     }
 
+    # Pregunta categoría
     keyboard = [
-        [InlineKeyboardButton("Noticia", callback_data="cat_Noticia"),
-         InlineKeyboardButton("Estadísticas", callback_data="cat_Estadísticas")],
-        [InlineKeyboardButton("Manual", callback_data="cat_Manual"),
-         InlineKeyboardButton("Resultados", callback_data="cat_Resultados")],
+        [
+            InlineKeyboardButton("Noticia", callback_data="cat_Noticia"),
+            InlineKeyboardButton("Estadísticas", callback_data="cat_Estadísticas"),
+        ],
+        [
+            InlineKeyboardButton("Manual", callback_data="cat_Manual"),
+            InlineKeyboardButton("Resultados", callback_data="cat_Resultados"),
+        ],
         [InlineKeyboardButton("Otros", callback_data="cat_Otros")]
     ]
 
-    await message.reply_text("¿Qué tipo de contenido es?", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text(
+        "¿Qué tipo de contenido es?",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 
 # ==========================
-#   CALLBACK DE BOTONES
+#   CALLBACKS
 # ==========================
 async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     query = update.callback_query
     await query.answer()
 
@@ -108,190 +162,191 @@ async def callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     state = user_state.get(user_id)
-    if not state:
-        await query.edit_message_text("No hay sesión activa. Envíame otra imagen o vídeo.")
-        return
-
     data = query.data
 
-    # Elegir categoría
     if data.startswith("cat_"):
-        category = data.replace("cat_", "")
-        state["category"] = category
+        state["category"] = data.replace("cat_", "")
+
+        if not state["link"]:
+            # Sin link → vista previa directamente
+            await show_preview_after_category(update, context)
+            return
+
+        # Con link → pedir fuente
+        keyboard = [
+            [InlineKeyboardButton("Twitter FE", callback_data="src_TwitterFE")]
+        ]
+
         await query.edit_message_text(
-            f"Categoría seleccionada: {category}\n\nEscribe ahora el nombre de la **fuente**."
+            "He detectado un enlace.\n\nEscribe la **fuente** o elige una:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
 
-    # Elegir envío ahora o programar
-    if data.startswith("send_"):
-        action = data.replace("send_", "")
-        if action == "now":
-            await send_post(update, context, scheduled=False)
-        else:
-            await query.edit_message_text(
-                "Introduce la fecha y hora de envío en formato DD/MM/YYYY HH:MM\nEjemplo: 05/12/2025 15:30"
-            )
+    if data == "src_TwitterFE":
+        state["source"] = "Twitter FE"
+        await show_preview_after_category(update, context)
+        return
+
+    if data == "send_now":
+        await send_to_channel(update, context)
+        await query.edit_message_text("✔ Publicado en el canal.")
+        user_state.pop(user_id, None)
+        return
+
+    if data == "send_later":
+        await query.edit_message_text("Vista previa generada. Puedes reenviarla cuando quieras.")
         return
 
 
 # ==========================
-#   MANEJAR TEXTO COMO FUENTE O FECHA
+#   MANEJAR TEXTO COMO FUENTE
 # ==========================
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     if not allowed(update):
         return
 
     user_id = update.effective_user.id
     state = user_state.get(user_id)
-    text = update.message.text
 
-    if state:
-        # Paso fuente
-        if state["category"] and state["source"] is None:
-            state["source"] = text
-            keyboard = [
-                [InlineKeyboardButton("Enviar ahora", callback_data="send_now"),
-                 InlineKeyboardButton("Programar", callback_data="send_later")]
-            ]
-            await update.message.reply_text(
-                f"Fuente guardada: {state['source']}\n\n¿Enviar ahora o programar?",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-            return
-
-        # Paso fecha/hora
-        elif state["category"] and state["source"] and state["schedule_datetime"] is None:
-            try:
-                send_datetime = datetime.strptime(text, "%d/%m/%Y %H:%M")
-                if send_datetime < datetime.now():
-                    await update.message.reply_text("La fecha/hora debe ser en el futuro.")
-                    return
-
-                state["schedule_datetime"] = send_datetime
-                job = context.job_queue.run_once(
-                    scheduled_job,
-                    when=(send_datetime - datetime.now()).total_seconds(),
-                    chat_id=user_id,
-                    name=f"job_{user_id}"
-                )
-                state["job"] = job
-
-                await update.message.reply_text(
-                    f"✅ Mensaje programado para {send_datetime.strftime('%d/%m/%Y %H:%M')}\n\n"
-                    f"Contenido:\n{format_caption(state['caption'], state['category'], state['source'])}\n\n"
-                    "Si quieres cancelar el envío antes de que ocurra, usa /cancelar."
-                )
-
-            except ValueError:
-                await update.message.reply_text(
-                    "Formato incorrecto. Usa DD/MM/YYYY HH:MM\nEjemplo: 05/12/2025 15:30"
-                )
-            return
+    if state and state["link"] and state["source"] is None:
+        state["source"] = update.message.text
+        await show_preview_after_category(update, context)
 
 
 # ==========================
-#   FORMATEO DEL TEXTO
+#   FORMATEAR CAPTION
 # ==========================
-def format_caption(original_text, category, source):
-    paragraphs = original_text.strip().split("\n")
-    first_bold = f"*{paragraphs[0]}*"
-    rest = "\n".join(paragraphs[1:])
-    final_text = first_bold
-    if rest:
-        final_text += "\n" + rest
+def format_caption(text, category, source, link):
+    parts = text.split("\n")
+    formatted = f"*{parts[0]}*"
+    if len(parts) > 1:
+        formatted += "\n" + "\n".join(parts[1:])
 
-    hashtags = {"Noticia": "#Noticia", "Estadísticas": "#Estadísticas",
-                "Manual": "#ManualFE", "Resultados": "#Resultados", "Otros": ""}
+    hashtags = {
+        "Noticia": "#Noticia",
+        "Estadísticas": "#Estadísticas",
+        "Manual": "#ManualFE",
+        "Resultados": "#Resultados",
+        "Otros": ""
+    }
 
     tag = hashtags.get(category, "")
     if tag:
-        final_text += f"\n\n{tag}"
+        formatted += f"\n\n{tag}"
 
-    link = ""
-    for word in original_text.split():
-        if word.startswith("http://") or word.startswith("https://"):
-            link = word
+    if link and source:
+        formatted += f"\n🔗 [{source}]({link})"
 
-    if link:
-        final_text += f"\n🔗 [{source}]({link})"
-
-    return final_text
+    return formatted
 
 
 # ==========================
-#   ENVÍO DEL POST
+#   MOSTRAR VISTA PREVIA
 # ==========================
-async def send_post(update: Update, context: ContextTypes.DEFAULT_TYPE, scheduled=False):
-    user_id = update.effective_user.id
-    state = user_state.get(user_id)
-    if not state:
-        return
-
-    formatted = format_caption(state["caption"], state["category"], state["source"])
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]])
-
-    if state["media_type"] == "photo":
-        await context.bot.send_photo(chat_id=TARGET_CHANNEL, photo=state["file_id"],
-                                     caption=formatted, parse_mode="Markdown", reply_markup=keyboard)
-    else:
-        await context.bot.send_video(chat_id=TARGET_CHANNEL, video=state["file_id"],
-                                     caption=formatted, parse_mode="Markdown", reply_markup=keyboard)
-
-    if not scheduled:
-        await update.message.reply_text("✔ Publicado en el canal.")
-
-    user_state.pop(user_id, None)
-
-
-# ==========================
-#   JOB PROGRAMADO
-# ==========================
-async def scheduled_job(context: ContextTypes.DEFAULT_TYPE):
-    job = context.job
-    user_id = job.chat_id
-    fake_update = type("obj", (object,), {"effective_user": type("obj2", (object,), {"id": user_id})})
-    await send_post(fake_update, context, scheduled=True)
-    state = user_state.get(user_id)
-    if state:
-        state["job"] = None
-        state["schedule_datetime"] = None
-
-
-# ==========================
-#   CANCELAR MENSAJE PROGRAMADO
-# ==========================
-async def cancel_scheduled(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not allowed(update):
-        return
+async def show_preview_after_category(update, context):
 
     user_id = update.effective_user.id
-    state = user_state.get(user_id)
-    if state and state.get("job"):
-        state["job"].schedule_removal()
-        state["job"] = None
-        state["schedule_datetime"] = None
-        await update.message.reply_text("❌ Mensaje programado cancelado.")
+    state = user_state[user_id]
+
+    formatted = format_caption(
+        state["caption"], state["category"], state["source"], state["link"]
+    )
+
+    # Botón suscríbete
+    subscribe_btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]
+    ])
+
+    # Álbum
+    if len(state["files"]) > 1:
+        media = []
+        for idx, (mtype, fid) in enumerate(state["files"]):
+            if mtype == "photo":
+                if idx == 0:
+                    media.append(InputMediaPhoto(fid, caption=formatted, parse_mode="Markdown"))
+                else:
+                    media.append(InputMediaPhoto(fid))
+            else:
+                if idx == 0:
+                    media.append(InputMediaVideo(fid, caption=formatted, parse_mode="Markdown"))
+                else:
+                    media.append(InputMediaVideo(fid))
+
+        await update.message.reply_media_group(media)
+
     else:
-        await update.message.reply_text("No tienes mensajes programados.")
+        mtype, fid = state["files"][0]
+        if mtype == "photo":
+            await update.message.reply_photo(fid, caption=formatted, parse_mode="Markdown")
+        else:
+            await update.message.reply_video(fid, caption=formatted, parse_mode="Markdown")
+
+    # Botones enviar ahora / después
+    keyboard = [
+        [
+            InlineKeyboardButton("Enviar ahora", callback_data="send_now"),
+            InlineKeyboardButton("Enviar después", callback_data="send_later"),
+        ]
+    ]
+
+    await update.message.reply_text(
+        "Aquí tienes la vista previa:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# ==========================
+#   ENVIAR AL CANAL
+# ==========================
+async def send_to_channel(update, context):
+
+    user_id = update.effective_user.id
+    state = user_state[user_id]
+
+    formatted = format_caption(
+        state["caption"], state["category"], state["source"], state["link"]
+    )
+
+    # Álbum
+    if len(state["files"]) > 1:
+        media = []
+        for idx, (mtype, fid) in enumerate(state["files"]):
+            if mtype == "photo":
+                if idx == 0:
+                    media.append(InputMediaPhoto(fid, caption=formatted, parse_mode="Markdown"))
+                else:
+                    media.append(InputMediaPhoto(fid))
+            else:
+                if idx == 0:
+                    media.append(InputMediaVideo(fid, caption=formatted, parse_mode="Markdown"))
+                else:
+                    media.append(InputMediaVideo(fid))
+
+        await context.bot.send_media_group(TARGET_CHANNEL, media)
+
+    # Mensaje simple
+    else:
+        mtype, fid = state["files"][0]
+        if mtype == "photo":
+            await context.bot.send_photo(TARGET_CHANNEL, fid, caption=formatted, parse_mode="Markdown")
+        else:
+            await context.bot.send_video(TARGET_CHANNEL, fid, caption=formatted, parse_mode="Markdown")
 
 
 # ==========================
 #   MAIN
 # ==========================
 def main():
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    application.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, handle_media))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    application.add_handler(CallbackQueryHandler(callbacks))
-    application.add_handler(CommandHandler("cancelar", cancel_scheduled))
-    application.add_handler(CommandHandler("start", start_bot))
+    app.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO, handle_media))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(CallbackQueryHandler(callbacks))
 
-    application.run_polling()
+    app.run_polling()
 
 
 if __name__ == "__main__":
     main()
-
-
