@@ -254,6 +254,9 @@ async def show_preview_after_category(update, context):
         state["caption"], state["category"], state["source"], state["link"]
     )
 
+    # 🔥 AQUÍ ESTÁ EL FIX IMPORTANTE
+    origin = update.message or update.callback_query.message
+
     # Botón suscríbete
     subscribe_btn = InlineKeyboardMarkup([
         [InlineKeyboardButton("SUSCRÍBETE", url="https://t.me/FormulaEEsp")]
@@ -274,14 +277,14 @@ async def show_preview_after_category(update, context):
                 else:
                     media.append(InputMediaVideo(fid))
 
-        await update.message.reply_media_group(media)
+        await origin.reply_media_group(media)
 
     else:
         mtype, fid = state["files"][0]
         if mtype == "photo":
-            await update.message.reply_photo(fid, caption=formatted, parse_mode="Markdown")
+            await origin.reply_photo(fid, caption=formatted, parse_mode="Markdown")
         else:
-            await update.message.reply_video(fid, caption=formatted, parse_mode="Markdown")
+            await origin.reply_video(fid, caption=formatted, parse_mode="Markdown")
 
     # Botones enviar ahora / después
     keyboard = [
@@ -291,7 +294,7 @@ async def show_preview_after_category(update, context):
         ]
     ]
 
-    await update.message.reply_text(
+    await origin.reply_text(
         "Aquí tienes la vista previa:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -350,4 +353,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
